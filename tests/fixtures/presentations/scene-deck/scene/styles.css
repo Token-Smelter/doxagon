@@ -1,0 +1,5 @@
+body { margin: 0; padding: 3vw; background: #172b2e; color: #f2e4cb; font-family: Georgia, serif; }
+h1 { font-weight: 400; font-size: clamp(20px, 4vw, 52px); }
+svg { display: block; width: 100%; }
+.reading { max-width: 60ch; line-height: 1.5; }
+.tail { height: 900px; }

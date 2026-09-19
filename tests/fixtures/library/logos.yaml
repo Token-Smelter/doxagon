@@ -1,0 +1,18 @@
+edges:
+  - source: d-child-a
+    target: d-root
+    type: supports
+    rationale: "Child A provides supporting argument for root"
+    confidence: high
+
+  - source: d-child-b
+    target: d-root
+    type: supports
+    rationale: "Child B provides additional support for root"
+    confidence: high
+
+  - source: d-root
+    target: d-child-a
+    type: elaborates
+    rationale: "Root elaborates on the point made by child A"
+    confidence: medium

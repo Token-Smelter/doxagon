@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doxagon"
+version = "0.1.0"
+description = "Thesis framework and presentation factory"
+requires-python = ">=3.11"
+
+dependencies = [
+    "Pillow>=10.0.0",
+    "python-pptx>=0.6.21",
+    "PyYAML>=6.0",
+    "click>=8.0.0",
+    "python-frontmatter>=1.0.0",
+    "networkx>=3.0",
+    # Web / Backend dependencies
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.20",
+    "pydantic>=2.0",
+    "python-multipart>=0.0.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pytest",
+    "httpx",  # For testing API
+    "playwright",  # Headless browser for HTML slide rendering
+]
+
+[tool.setuptools.packages.find]
+where = ["src", "."]  # Search src for doxagon, root for factory/scripts legacy
+include = ["doxagon*", "factory*", "scripts*"]
+exclude = ["theses*", "docs*", ".claude*", ".venv*", ".git*"]
+
+[tool.setuptools.package-data]
+doxagon = [
+    "resources/*.yaml",
+    "resources/*.json",
+    "resources/*.md",
+    "resources/skills/*/SKILL.md",
+    "resources/demo-vault/knowledge/*.yaml",
+    "resources/demo-vault/knowledge/doxai/*.md",
+    "resources/demo-vault/knowledge/evidence/*.md",
+    "resources/demo-vault/knowledge/diegeses/*.md",
+    "resources/demo-vault/media/.keep",
+    "resources/demo-vault/projects/.keep",
+    "resources/demo-vault/.doxagon/*.json",
+    "resources/demo-vault/.doxagon/*.toml",
+    "resources/demo-vault/.doxagon/artifacts/.keep",
+    "resources/demo-vault/.doxagon/state/.keep",
+    "resources/demo-vault/.doxagon/extensions/*.json",
+]
+html_editions = [
+    "resources/*.js",
+    "resources/*.css",
+]
+"doxagon.presentations" = [
+    "resources/*.js",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.scripts]
+dox = "scripts.dox:cli"

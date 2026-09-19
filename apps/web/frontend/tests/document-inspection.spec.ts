@@ -1,0 +1,170 @@
+import { expect, test } from '@playwright/test';
+import { startVaultServer, useRealVault, type VaultServer } from './support/vaultServer';
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+let server: VaultServer;
+test.beforeAll(async () => { server = await startVaultServer(); });
+test.afterAll(async () => { await server?.stop(); });
+test.beforeEach(async ({ context }) => { await useRealVault(context, server); });
+
+for (const width of [1440, 390]) {
+    test(`authored inspection reuses the workspace at ${width}px and retains the frame across tabs and Present`, async ({ page, context }) => {
+        await page.setViewportSize({ width, height: 1000 });
+        const requests: string[] = [];
+        const writes: string[] = [];
+        const stepReads: string[] = [];
+        page.on('request', request => {
+            requests.push(request.url());
+            if (request.method() !== 'GET') writes.push(request.url());
+            if (request.url().includes('/api/presentations/')) stepReads.push(request.url());
+        });
+        await page.goto('/presentations?thesis=observatory');
+        await expect(page.getByTestId('document-cue')).toHaveText('1 / 5');
+        await expect(page.locator('.presentation-editor')).toBeVisible();
+        expect(context.pages()).toHaveLength(1);
+        expect(await page.evaluate(() => !!document.fullscreenElement)).toBe(false);
+        expect(requests.filter(url => url.includes('/notes'))).toEqual([]);
+        expect(requests.filter(url => url.includes('/image?') && url.includes('thumbnail=false'))).toEqual([]);
+        const frame = page.frames().find(frame => frame.url().includes('/authored-document/render/'))!;
+        const instance = await frame.evaluate('window.observatory.instance');
+        const preview = page.locator('iframe[title="Isolated document player"]');
+        const bounds = (await preview.boundingBox())!;
+        expect(bounds.width / bounds.height).toBeCloseTo(16 / 9, 2);
+        if (width >= 1200) {
+            const inspector = (await page.locator('section.inspector').boundingBox())!;
+            expect(inspector.x).toBeGreaterThan(bounds.x + bounds.width);
+            expect(inspector.y).toBeLessThan(bounds.y + bounds.height);
+            await page.setViewportSize({ width: 1600, height: 1000 });
+            await expect.poll(async () => (await preview.boundingBox())!.width).toBeGreaterThan(bounds.width);
+            const resized = (await preview.boundingBox())!;
+            expect(resized.width / resized.height).toBeCloseTo(16 / 9, 2);
+            expect(await frame.evaluate('window.observatory.instance')).toBe(instance);
+            await page.setViewportSize({ width, height: 1000 });
+        }
+        if (width < 1024) await page.getByRole('button', { name: 'Inspector', exact: true }).click();
+        await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible();
+        await expect(page.getByTestId('document-inspector')).toContainText('11 image placements');
+        await expect(page.getByTestId('document-inspector')).toContainText('10 embedded images');
+        await page.getByRole('tab', { name: 'Media', exact: true }).click();
+        await expect(page.locator('.overview-gallery img')).toHaveCount(10);
+        await expect(page.locator('.overview-gallery img').first()).toBeVisible();
+        const thumbnails = () => new Set(requests.filter(url => url.includes('thumbnail=true'))).size;
+        await expect.poll(thumbnails).toBeGreaterThan(0);
+        expect(thumbnails()).toBeLessThan(10);
+        await expect(page.getByRole('button', { name: 'More images', exact: true })).toHaveCount(0);
+        const firstImage = await page.locator('.overview-gallery img').first().elementHandle();
+        const initialThumbnails = thumbnails();
+        const lastImage = page.locator('.overview-gallery img').last();
+        await expect(lastImage).not.toHaveAttribute('src');
+        await lastImage.scrollIntoViewIfNeeded();
+        await expect.poll(() => lastImage.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+        expect(thumbnails()).toBeGreaterThan(initialThumbnails);
+        expect(await firstImage!.evaluate(image => image === document.querySelector('.overview-gallery img'))).toBe(true);
+        expect(requests.filter(url => url.includes('thumbnail=false'))).toEqual([]);
+        await page.getByRole('button', { name: 'View Plate 0', exact: true }).click();
+        await expect(page.getByTestId('image-viewer-image')).toBeVisible();
+        await expect.poll(() => requests.filter(url => url.includes('thumbnail=false')).length).toBe(1);
+        await page.getByTestId('image-viewer-close').click();
+        await page.getByRole('tab', { name: 'Source', exact: true }).click();
+        await page.getByRole('button', { name: 'document: observatory.html', exact: false }).click();
+        await expect(page.getByLabel('Read-only source')).toContainText('[embedded image payload]');
+        await page.getByLabel('Read-only source').focus();
+        await page.keyboard.press('ArrowDown');
+        expect(await frame.evaluate<number>('window.observatory.state().index')).toBe(0);
+        await page.getByRole('tab', { name: 'Notes', exact: true }).click();
+        await expect(page.getByLabel('Private notes source')).toContainText('Introduce the synthetic observatory.');
+        expect(await frame.content()).not.toContain('Introduce the synthetic observatory.');
+        expect(await frame.evaluate('window.observatory.instance')).toBe(instance);
+        const popupPromise = page.waitForEvent('popup');
+        await page.getByRole('button', { name: 'Present', exact: true }).click();
+        const popup = await popupPromise;
+        await expect(page.getByTestId('authored-audience')).toBeVisible();
+        const audience = await page.getByTestId('authored-audience').boundingBox();
+        expect(audience?.width).toBe(width);
+        expect(audience?.height).toBe(1000);
+        await expect(popup.getByTestId('speaker-note')).toContainText('Introduce the synthetic observatory.');
+        await popup.getByRole('button', { name: 'Next', exact: true }).click();
+        await expect(popup.getByTestId('speaker-note')).toContainText('Measure one orbit.');
+        await popup.getByRole('button', { name: 'End presentation', exact: true }).click();
+        await expect(page.getByRole('tab', { name: 'Notes', exact: true })).toHaveAttribute('aria-selected', 'true');
+        await expect.poll(() => frame.evaluate<number>('window.observatory.state().index')).toBe(1);
+        await expect(page.getByLabel('Private notes source')).toContainText('Introduce the synthetic observatory.');
+        expect(await frame.evaluate('window.observatory.instance')).toBe(instance);
+        expect({ writes, stepReads }).toEqual({ writes: [], stepReads: [] });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    });
+}
+
+test('the same workspace still opens a legacy Step project', async ({ page }) => {
+    await page.goto('/presentations?thesis=alpha');
+    await expect(page.locator('.presentation-editor')).toBeVisible();
+    await expect(page.getByTestId('checkpoint-outline')).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Media', exact: true })).toBeVisible();
+    await expect(page.getByTestId('authored-player')).toHaveCount(0);
+});
+
+for (const width of [1440, 390]) {
+    test(`image generation inputs remain connected to the image at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 1000 });
+        const requests: string[] = [];
+        page.on('request', request => requests.push(request.url()));
+        await page.goto('/presentations?thesis=observatory');
+        await expect(page.getByTestId('document-cue')).toHaveText('1 / 5');
+        if (width < 1024) await page.getByRole('button', { name: 'Inspector', exact: true }).click();
+        await page.getByRole('tab', { name: 'Media', exact: true }).click();
+        expect(requests.some(url => /\/items\/[^/?]+\?/.test(url))).toBe(false);
+        const card = page.locator('.overview-gallery > li').first();
+        await card.locator('summary').first().click();
+        const details = card.getByTestId('image-generation-details');
+        await expect(details.getByLabel('Image-specific prompt', { exact: true })).toContainText('An astronomer at dawn.');
+        await expect(details).toContainText('[ASTRONOMER]');
+        await expect(details).toContainText('Tags without a matching declaration');
+        await details.locator('summary').filter({ hasText: 'constraints/layout' }).click();
+        await expect(details.getByLabel('Style constraints/layout', { exact: true })).toContainText('No lettering.');
+        await details.locator('summary').filter({ hasText: 'Saved assembled prompt' }).click();
+        await expect(details.getByLabel('Saved assembled prompt', { exact: true })).toContainText('violet sky');
+        await expect(details).toContainText('image association unverified');
+        await details.locator('summary').filter({ hasText: 'Assembled prompt from current inputs' }).click();
+        await expect(details.getByLabel('Current assembled prompt', { exact: true })).toContainText('White paper.');
+        expect(requests.some(url => url.includes('thumbnail=false'))).toBe(false);
+        expect(await page.evaluate('window.promptExecuted')).toBeUndefined();
+        await page.getByRole('button', { name: 'View Plate 0', exact: true }).click();
+        const viewer = page.getByTestId('image-viewer');
+        await expect(viewer.getByLabel('Image-specific prompt', { exact: true })).toContainText('astronomer at dawn');
+        await viewer.getByLabel('Image-specific prompt', { exact: true }).focus();
+        await page.keyboard.press('ArrowRight');
+        await expect(page.getByTestId('image-viewer-position')).toHaveText('1 of 10');
+        await viewer.getByRole('button', { name: 'Next image', exact: true }).click();
+        await expect(viewer.getByTestId('image-generation-details')).toContainText('No unique source bundle');
+        await expect(viewer.getByLabel('Image-specific prompt', { exact: true })).toHaveCount(0);
+        await expect(page.getByTestId('document-cue')).toHaveText('1 / 5');
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    });
+}
+
+test('external changes conflict with inspection until explicit refresh and never replace a presentation in progress', async ({ page }) => {
+    await page.goto('/presentations?thesis=observatory');
+    await expect(page.getByTestId('document-cue')).toHaveText('1 / 5');
+    const frame = page.frames().find(frame => frame.url().includes('/authored-document/render/'))!;
+    const instance = await frame.evaluate('window.observatory.instance');
+    const popupPromise = page.waitForEvent('popup');
+    await page.getByRole('button', { name: 'Present', exact: true }).click();
+    const popup = await popupPromise;
+    await expect(popup.getByTestId('speaker-note')).toContainText('Introduce the synthetic observatory.');
+    appendFileSync(join(server.root, 'projects/observatory/config.yaml'), '\n# external edit\n');
+    await popup.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(popup.getByTestId('speaker-note')).toContainText('Measure one orbit.');
+    expect(await frame.evaluate('window.observatory.instance')).toBe(instance);
+    await popup.getByRole('button', { name: 'End presentation', exact: true }).click();
+    await expect(page.getByText('A new revision is available. Refresh when ready.', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('document-cue')).toHaveText('2 / 5');
+    await page.getByRole('tab', { name: 'Source', exact: true }).click();
+    await page.getByRole('button', { name: 'document: observatory.html', exact: false }).click();
+    await expect(page.getByRole('alert')).toContainText('refresh the workspace');
+    await page.getByRole('button', { name: 'Refresh document', exact: true }).click();
+    await expect(page.getByTestId('document-cue')).toHaveText('2 / 5');
+    await page.getByRole('button', { name: 'document: observatory.html', exact: false }).click();
+    await expect(page.getByLabel('Read-only source')).toContainText('[embedded image payload]');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+});

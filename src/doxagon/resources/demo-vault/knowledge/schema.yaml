@@ -1,0 +1,6 @@
+# Synthetic demo vocabulary. Authored for the packaged fixture; it is not the
+# platform base schema and is not derived from any real vault.
+edge_types:
+  supports: {}
+  contradicts: {}
+  refines: {}

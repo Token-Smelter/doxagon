@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Airlock, a synthetic telling</title><style>body{margin:0;background:#f6f1e6;color:#16130f;font:24px Georgia}section{height:100vh;display:grid;place-content:center}h1{font-size:3rem}</style></head><body><section><h1>The airlock</h1></section><section><h1>The verdict</h1></section>
+<script>
+(() => {
+    const documentId = 'synthetic-telling';
+    const edition = '2026-telling';
+    const cues = [
+        { id: 'airlock', title: 'The airlock', claims: ['d-partisan-validators', 'd-household-verification-airlock'] },
+        { id: 'verdict', title: 'The verdict' },
+    ];
+    let port = null;
+    const state = () => ({ type: 'position', documentId, edition, cue: scrollY < innerHeight ? 'airlock' : 'verdict', index: scrollY < innerHeight ? 0 : 1, total: 2, progress: Math.min(1, scrollY / innerHeight) });
+    addEventListener('scroll', () => port?.postMessage(state()));
+    addEventListener('message', event => {
+        if (event.source !== parent || parent === window || event.data?.type !== 'doxagon:connect' || !event.ports[0]) return;
+        port?.close();
+        port = event.ports[0];
+        port.onmessage = ({ data }) => {
+            if (data?.type === 'next' || (data?.type === 'go' && data.cue === 'verdict')) scrollTo(0, innerHeight);
+            if (data?.type === 'previous' || (data?.type === 'go' && data.cue === 'airlock')) scrollTo(0, 0);
+            port.postMessage(state());
+        };
+        port.start();
+        port.postMessage({ type: 'ready', documentId, edition, cues });
+        port.postMessage(state());
+    });
+})();
+</script></body></html>

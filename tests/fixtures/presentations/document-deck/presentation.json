@@ -1,0 +1,68 @@
+{
+  "schema": "doxagon.presentation/2",
+  "presentation_id": "document-deck",
+  "checkpoint_order": [
+    "field-document",
+    "afterword-document"
+  ],
+  "checkpoints": [
+    {
+      "id": "field-document",
+      "label": "A field that answers",
+      "source": "page",
+      "entry": "entry.js",
+      "document": "document.html",
+      "styles": "styles.css",
+      "modules": [
+        "scene.js"
+      ],
+      "assets": [],
+      "capabilities": [
+        "timers"
+      ],
+      "mode": "document",
+      "cues": [
+        "field",
+        "clusters",
+        "closing"
+      ],
+      "cue_notes": {
+        "field": "notes-field.md",
+        "clusters": "notes-clusters.md",
+        "closing": "notes-closing.md"
+      },
+      "transition": {
+        "edge_id": "onward",
+        "forward_to": "afterword-document"
+      }
+    },
+    {
+      "id": "afterword-document",
+      "label": "Afterword",
+      "source": "page",
+      "entry": "closing.js",
+      "document": "closing.html",
+      "styles": "styles.css",
+      "modules": [
+        "scene.js"
+      ],
+      "assets": [],
+      "capabilities": [
+        "timers"
+      ],
+      "mode": "document",
+      "cues": [
+        "afterword"
+      ],
+      "cue_notes": {
+        "afterword": "notes-afterword.md"
+      },
+      "transition": {
+        "back_to": "field-document",
+        "back_edge_id": "onward"
+      }
+    }
+  ],
+  "groups": [],
+  "assets": []
+}

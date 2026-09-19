@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Doxagon">
+  <title>Doxagon</title>
+  <!-- The squared circle: the classical figure of the philosopher's stone —
+       circle, triangle, square, circle — drawn in the brand's own alchemical
+       palette (nigredo ground, gold work, rubedo centre). -->
+  <rect width="32" height="32" rx="7" fill="#16130F"/>
+  <circle cx="16" cy="16.5" r="12" fill="none" stroke="#B8973F" stroke-width="1.5"/>
+  <rect x="8.5" y="9" width="15" height="15" fill="none" stroke="#9A9488" stroke-width="1.1"/>
+  <path d="M16 6.5 L25 22 L7 22 Z" fill="none" stroke="#E4C877" stroke-width="1.6" stroke-linejoin="round"/>
+  <circle cx="16" cy="17.4" r="4.6" fill="none" stroke="#C6A02C" stroke-width="1.5"/>
+  <circle cx="16" cy="17.4" r="2" fill="#8C2B20"/>
+</svg>

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://doxagon.dev/schemas/publication/bundle-v1.schema.json",
+  "title": "Doxagon publication bundle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version", "policy_digest", "authority_generation", "items"],
+  "properties": {
+    "format_version": {"const": 1},
+    "policy_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "authority_generation": {"type": "integer", "minimum": 0},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["logical_id", "sha256", "action"],
+        "properties": {
+          "logical_id": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "action": {"enum": ["include"]}
+        }
+      }
+    }
+  }
+}

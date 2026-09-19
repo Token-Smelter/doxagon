@@ -1,0 +1,16 @@
+edges:
+- source: d-steam-delays-crust-set
+  target: d-hydration-opens-crumb
+  type: supports
+  alias: steam preserves the gas cells hydration creates
+  confidence: medium
+- source: d-fast-rise-suffices-for-enriched
+  target: d-long-ferment-builds-flavor
+  type: contradicts
+  alias: enriched doughs are the standing exception
+  confidence: medium
+- source: d-hydration-opens-crumb
+  target: d-long-ferment-builds-flavor
+  type: refines
+  alias: crumb and flavor are separate axes
+  confidence: low

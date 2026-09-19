@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Tide — second synthetic document</title><style>body{margin:0;background:#f1f5f3;color:#203b32;font:24px Georgia}section{height:100vh;display:grid;place-content:center}h1{font-size:3rem}</style></head><body><section><h1>Low tide</h1></section><section><h1>High tide</h1></section>
+<script>
+(() => {
+    const documentId = 'synthetic-tide';
+    const edition = '2026-public';
+    const cues = [{ id: 'low', title: 'Low tide' }, { id: 'high', title: 'High tide' }];
+    let port = null;
+    const state = () => ({ type: 'position', documentId, edition, cue: scrollY < innerHeight ? 'low' : 'high', index: scrollY < innerHeight ? 0 : 1, total: 2, progress: Math.min(1, scrollY / innerHeight), chapter: 'shore' });
+    addEventListener('scroll', () => port?.postMessage(state()));
+    addEventListener('message', event => {
+        if (event.source !== parent || parent === window || event.data?.type !== 'doxagon:connect' || !event.ports[0]) return;
+        port?.close();
+        port = event.ports[0];
+        port.onmessage = ({ data }) => {
+            if (data?.type === 'next' || (data?.type === 'go' && data.cue === 'high')) scrollTo(0, innerHeight);
+            if (data?.type === 'previous' || (data?.type === 'go' && data.cue === 'low')) scrollTo(0, 0);
+            port.postMessage(state());
+        };
+        port.start();
+        port.postMessage({ type: 'ready', documentId, edition, cues });
+        port.postMessage(state());
+    });
+})();
+</script></body></html>

@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "root": "demo-vault",
+  "files": [
+    {"path": ".doxagon/artifacts/.keep", "sha256": "9e3b53f64661686993d18589fa25dc40e22b171384b0e1f2e939e3dd11c0a661"},
+    {"path": ".doxagon/authority-generation.json", "sha256": "e376221d0f97ba093a1fe735fead508ef2e592cf4698dae22f041e87ba58cb10"},
+    {"path": ".doxagon/extensions/manifest-v1.json", "sha256": "e892d57fac1f5f33593860dbd8c68ab390aade1036732062703d20bc896d341d"},
+    {"path": ".doxagon/project-output-inventory-v1.json", "sha256": "5f01b6599fd33468ccea18eea8c4e67c8fe244bdf776791b9d90fe60b7132d7b"},
+    {"path": ".doxagon/state/.keep", "sha256": "d5b3dcd8dd7962616ea626c5c5f5f24801aca899bfe2c9a6ae6927e19e019f92"},
+    {"path": ".doxagon/vault.toml", "sha256": "6d88fb5cd2ba6037cd6fc2f31478351c679393ca6f818f3d4190f3cbf3997856"},
+    {"path": "knowledge/diegeses/n-demo-walkthrough.md", "sha256": "e6f71b5339fe592bcecbb7318ccefeec2f05e563f41e5a81e63584857db841bd"},
+    {"path": "knowledge/doxai/d-fast-rise-suffices-for-enriched.md", "sha256": "cf6d1127a19d27e861ba30f320650dc9f54223ddf48bccc5cdaea7e9fa11d6ed"},
+    {"path": "knowledge/doxai/d-hydration-opens-crumb.md", "sha256": "a3793b3759ba8d7ffe2dbfa1669f96f661a25705d7393148bb01b26e9aaf04b5"},
+    {"path": "knowledge/doxai/d-long-ferment-builds-flavor.md", "sha256": "c20b7b8fcc1a968c124a0d98f9e827c4d7d721388b11cac81a9340b08672c7de"},
+    {"path": "knowledge/doxai/d-steam-delays-crust-set.md", "sha256": "1bf38cbe4d0adcab1441fa5e5c96bcf289f9673cdbefd9ff2b935121822cd4fa"},
+    {"path": "knowledge/evidence/e-fermentation-time-and-acidity.md", "sha256": "6d25344047c338bd9d1a3a03aeee38c89dc7edf90be18bdb19a45a9810f6b195"},
+    {"path": "knowledge/evidence/e-hydration-and-crumb-structure.md", "sha256": "7b86fc135de9432aef1af72799badc2e0c3885efda458284aac75cb134d08828"},
+    {"path": "knowledge/logos.yaml", "sha256": "e7a66e5f735cd34430b66393f5d9be82b209ebe8b677597243a5309bbb0890cd"},
+    {"path": "knowledge/schema.yaml", "sha256": "650d1aa05da99770dfd8164691ca5722827e72cd11e0d3bc54ac978e52a5a5d9"},
+    {"path": "media/.keep", "sha256": "477d775598d7d865a6ed9fa97a08b36ff1e8c774441c62f52333b81921530c4e"},
+    {"path": "projects/.keep", "sha256": "248d6e29fab7b03b249cc7383e42ad0e0628cf3abad94586aa4bdbb532493b60"}
+  ]
+}

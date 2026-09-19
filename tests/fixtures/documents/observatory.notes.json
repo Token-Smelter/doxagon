@@ -1,0 +1,11 @@
+{
+  "documentId": "synthetic-observatory",
+  "edition": "public-1",
+  "cues": [
+    { "id": "cue-0", "notes": "Introduce the synthetic observatory." },
+    { "id": "cue-1", "notes": "Measure one orbit. <img src=x onerror=alert(1)> is plain text here." },
+    { "id": "cue-2", "notes": "Compare two measurements." },
+    { "id": "cue-3", "notes": "Pause and reflect." },
+    { "id": "cue-4", "notes": "Close the observatory." }
+  ]
+}

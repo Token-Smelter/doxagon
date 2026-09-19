@@ -1,0 +1,21 @@
+vault_format = 1
+vault_id = "00000000-0000-7000-8000-000000000002"
+name = "synthetic-demo"
+
+[platform]
+requires = ">=0.1,<0.2"
+
+[schema]
+base = "1.0.0"
+extensions = []
+extension_manifest = ".doxagon/extensions/manifest-v1.json"
+
+[paths]
+knowledge = "knowledge"
+projects = "projects"
+media = "media"
+state = ".doxagon/state"
+artifacts = ".doxagon/artifacts"
+
+[features]
+presentations = false

@@ -1,0 +1,217 @@
+{
+  "schema": "doxagon.presentation/2",
+  "presentation_id": "scene-deck",
+  "checkpoint_order": [
+    "shape-start",
+    "shape-moved",
+    "shape-morphed",
+    "shape-failed",
+    "shape-stalled",
+    "shape-wrong",
+    "other-scene"
+  ],
+  "checkpoints": [
+    {
+      "id": "shape-start",
+      "label": "Shape Start",
+      "source": "scene",
+      "entry": "shape-start.js",
+      "document": "document.html",
+      "styles": "styles.css",
+      "modules": [
+        "scene.js"
+      ],
+      "notes": "shape-start.md",
+      "assets": [
+        "asset-market-map"
+      ],
+      "capabilities": [
+        "timers"
+      ],
+      "scene": "motion",
+      "transition": {
+        "linear": true,
+        "timeout_ms": 1200
+      }
+    },
+    {
+      "id": "shape-moved",
+      "label": "Shape Moved",
+      "source": "scene",
+      "entry": "shape-moved.js",
+      "document": "document.html",
+      "styles": "styles.css",
+      "modules": [
+        "scene.js"
+      ],
+      "notes": "shape-moved.md",
+      "assets": [
+        "asset-market-map"
+      ],
+      "capabilities": [
+        "timers"
+      ],
+      "scene": "motion",
+      "transition": {
+        "linear": true,
+        "timeout_ms": 1200
+      }
+    },
+    {
+      "id": "shape-morphed",
+      "label": "Shape Morphed",
+      "source": "scene",
+      "entry": "shape-morphed.js",
+      "document": "document.html",
+      "styles": "styles.css",
+      "modules": [
+        "scene.js"
+      ],
+      "notes": "shape-morphed.md",
+      "assets": [
+        "asset-market-map"
+      ],
+      "capabilities": [
+        "timers"
+      ],
+      "scene": "motion",
+      "transition": {
+        "linear": true,
+        "timeout_ms": 1200
+      }
+    },
+    {
+      "id": "shape-failed",
+      "label": "Shape Failed",
+      "source": "scene",
+      "entry": "shape-failed.js",
+      "document": "document.html",
+      "styles": "styles.css",
+      "modules": [
+        "scene.js"
+      ],
+      "notes": "shape-failed.md",
+      "assets": [
+        "asset-market-map"
+      ],
+      "capabilities": [
+        "timers"
+      ],
+      "scene": "motion",
+      "transition": {
+        "linear": true,
+        "timeout_ms": 1200
+      }
+    },
+    {
+      "id": "shape-stalled",
+      "label": "Shape Stalled",
+      "source": "scene",
+      "entry": "shape-stalled.js",
+      "document": "document.html",
+      "styles": "styles.css",
+      "modules": [
+        "scene.js"
+      ],
+      "notes": "shape-stalled.md",
+      "assets": [
+        "asset-market-map"
+      ],
+      "capabilities": [
+        "timers"
+      ],
+      "scene": "motion",
+      "transition": {
+        "linear": true,
+        "timeout_ms": 1200
+      }
+    },
+    {
+      "id": "shape-wrong",
+      "label": "Shape Wrong",
+      "source": "scene",
+      "entry": "shape-wrong.js",
+      "document": "document.html",
+      "styles": "styles.css",
+      "modules": [
+        "scene.js"
+      ],
+      "notes": "shape-wrong.md",
+      "assets": [
+        "asset-market-map"
+      ],
+      "capabilities": [
+        "timers"
+      ],
+      "scene": "motion",
+      "transition": {
+        "linear": true,
+        "timeout_ms": 1200
+      }
+    },
+    {
+      "id": "other-scene",
+      "label": "Other Scene",
+      "source": "scene",
+      "entry": "other-scene.js",
+      "document": "document.html",
+      "styles": "styles.css",
+      "modules": [
+        "scene.js"
+      ],
+      "assets": [
+        "asset-market-map"
+      ],
+      "capabilities": [
+        "timers"
+      ],
+      "scene": "separate",
+      "transition": {
+        "linear": true,
+        "timeout_ms": 1200
+      }
+    }
+  ],
+  "assets": [
+    {
+      "id": "asset-market-map",
+      "label": "Market map",
+      "alt": "A flat blue placeholder standing in for an annotated market map",
+      "media_type": "image/png",
+      "bytes": 77,
+      "sha256": "33c8b374fd47a804d25f410b0d9cb811db854741ce4d64aa4b8f0b00f0e8172c",
+      "storage_key": "sha256/33c8b374fd47a804d25f410b0d9cb811db854741ce4d64aa4b8f0b00f0e8172c",
+      "provenance": {
+        "kind": "authored",
+        "created_at": "2026-08-29T00:00:00Z",
+        "generator": null,
+        "prompt_sha256": null,
+        "source_ref": "synthetic public fixture",
+        "license": "CC0-1.0"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "id": "motion",
+      "kind": "slide",
+      "label": "A persistent scene",
+      "checkpoints": [
+        "shape-start",
+        "shape-moved",
+        "shape-morphed"
+      ]
+    },
+    {
+      "id": "recovery",
+      "kind": "slide",
+      "label": "Recovery probes",
+      "checkpoints": [
+        "shape-failed",
+        "shape-stalled",
+        "shape-wrong",
+        "other-scene"
+      ]
+    }
+  ]
+}

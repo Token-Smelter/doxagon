@@ -1,0 +1,3 @@
+recursive-include src/doxagon/prompts *.md
+recursive-include src/doxagon/resources/skills SKILL.md
+recursive-include src/doxagon/html_editions/resources *.js *.css

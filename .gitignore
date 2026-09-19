@@ -1,0 +1,97 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+.eggs/
+
+# Build artifacts
+/build/
+theses/*/build/
+lowres-output/
+
+# Generated outputs (but track slide/style source files)
+**/outputs/presentation/build/
+**/outputs/presentation/slides/*/images/*/outputs/
+**/outputs/presentation/*-bundle.html
+
+# Large binary files (generated, not source)
+*.pptx
+*.pdf
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+~$*
+*.tmp
+*.bak
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Draft/WIP
+draft/
+
+# Nanobanana output (generated images)
+nanobanana-output/
+
+# Active presentation marker (session-specific)
+CLAUDE.local.md
+
+# Web app
+apps/web/frontend/build/
+server.log
+apps/web/frontend/node_modules/
+apps/web/frontend/.svelte-kit/
+apps/web/frontend/*.log
+
+# Playwright
+.playwright-mcp/
+
+# Cache and run logs
+.cache/
+.triad/
+/.impeccable/critique/
+
+# Dev task worktrees
+.worktrees/
+.dag-orchestrator/
+
+# Private scratch — never commit (move to personal machine, then delete)
+.private-scratch/
+
+# Publication site — an independent repository, deliberately out of platform
+# scope for the first separated release. Not migrated to the vault.
+publish/
+
+# Playwright run artifacts
+apps/web/frontend/test-results/
+apps/web/frontend/playwright-report/
+
+# Private vault content and local authoring/session records
+/knowledge/
+/projects/
+/library/
+/theses/
+/design/
+/archives/
+/.sourcerer/
+/HANDOFF.md
+/CLAUDE_LOG.md
+/.platform-manifest.json
+
+# Local credentials
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+service-account*.json

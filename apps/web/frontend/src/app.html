@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+		<!-- The squared circle, so the tab is findable at a glance. SVG where it is
+		     honoured, ICO for the browsers that still ask for one. -->
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<link rel="alternate icon" href="/favicon.ico" sizes="48x48" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		<meta name="theme-color" content="#16130F" />
+		%sveltekit.head%
+		<style>
+			@font-face {
+				font-family: 'Space Grotesk';
+				font-style: normal;
+				font-weight: 400 700;
+				font-display: swap;
+				src: url('/fonts/space-grotesk-latin.woff2') format('woff2');
+			}
+			@font-face {
+				font-family: 'Newsreader';
+				font-style: normal;
+				font-weight: 400 500;
+				font-display: swap;
+				src: url('/fonts/newsreader-latin.woff2') format('woff2');
+			}
+			@font-face {
+				font-family: 'Newsreader';
+				font-style: italic;
+				font-weight: 400 500;
+				font-display: swap;
+				src: url('/fonts/newsreader-italic-latin.woff2') format('woff2');
+			}
+			@font-face {
+				font-family: 'JetBrains Mono';
+				font-style: normal;
+				font-weight: 400 700;
+				font-display: swap;
+				src: url('/fonts/jetbrains-mono-latin.woff2') format('woff2');
+			}
+
+			:root {
+				--z-presentation-audience: 9000;
+				--z-presentation-presenter: 9100;
+				--z-drawer-backdrop: 200;
+				--z-drawer: 210;
+				--z-bottom-sheet: 220;
+				--z-toolbar-overflow: 230;
+				--touch-target-min: 44px;
+				--drawer-width: min(280px, 85vw);
+				--bottom-sheet-max-height: 60vh;
+
+				/* Token Smelter global tokens. This document is SvelteKit's shared HTML shell,
+				 * so these custom properties reach every route without a component import. */
+
+				/* Brand primitives — canonical values from type-color-lab.html. */
+				--dox-brand-paper: #EFE6D2;
+				--dox-brand-paper-2: #E6DBC2;
+				--dox-brand-nigredo: #16130F;
+				--dox-brand-ash: #9A9488;
+				--dox-brand-citrinitas: #C6A02C;
+				--dox-brand-rubedo: #8C2B20;
+				--dox-brand-gold: #B8973F;
+				--dox-brand-gold-hi: #E4C877;
+
+				/* Product type roles use locally served, OFL-licensed faces. */
+				--dox-font-display: 'Space Grotesk', system-ui, sans-serif;
+				--dox-font-body: 'Newsreader', Georgia, serif;
+				--dox-font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+				/* Warm ink ramp for Stage 2 component migration. No component consumes it yet.
+				 * Actual frontend literal frequency (git grep, 2026-08-26) informs this mapping:
+				 * #1a1a1a (21) -> ink-950; #333 (82) -> ink-900; #444 (57) -> ink-800;
+				 * #555 (37) -> ink-700; #666 (62) -> ink-600; #888 (39) -> ink-500;
+				 * #999 (6)/#aaa (38) -> ink-400; #bbb (3)/#ccc (15) -> ink-300;
+				 * #ddd (23)/#eee (18) -> ink-200; #fff (64) -> ink-100.
+				 * The targets shift the current cool achromatic sequence to warm paper and ink. */
+				--dox-ink-950: var(--dox-brand-nigredo);
+				--dox-ink-900: #282219;
+				--dox-ink-800: #3D382F;
+				--dox-ink-700: #5C5347;
+				--dox-ink-600: #746B5C;
+				--dox-ink-500: var(--dox-brand-ash);
+				--dox-ink-400: #B9AF9D;
+				--dox-ink-300: #D1C8B6;
+				--dox-ink-200: var(--dox-brand-paper-2);
+				--dox-ink-100: var(--dox-brand-paper);
+
+				/* Cream is the primary ground. Bright gold is non-text only (2.25:1 on cream).
+				 * The lab's #8A6D1F is display-only (3.95:1); the deeper body token passes AA. */
+				--dox-ground: var(--dox-brand-paper);
+				--dox-surface: #F5EEDC;
+				--dox-surface-raised: var(--dox-brand-paper-2);
+				--dox-text-primary: var(--dox-brand-nigredo);
+				--dox-text-secondary: var(--dox-ink-800);
+				--dox-text-muted: var(--dox-ink-700);
+				--dox-gold-text-display: #8A6D1F;
+				--dox-gold-text: #6B5113;
+				--dox-text-accent: var(--dox-gold-text);
+				--dox-text-accent-display: var(--dox-gold-text-display);
+				--dox-accent: var(--dox-brand-gold); /* non-text fill, icon, or stroke */
+				--dox-focus-cream: var(--dox-gold-text); /* >=3:1 on cream ground and surfaces */
+				--dox-focus: var(--dox-focus-cream); /* non-text focus stroke */
+				--dox-rule: color-mix(in srgb, var(--dox-brand-nigredo) 16%, transparent);
+				--dox-rule-strong: color-mix(in srgb, var(--dox-brand-nigredo) 30%, transparent);
+				--dox-status-running: var(--dox-brand-rubedo); /* fill; pair with on-running */
+				--dox-status-warning: var(--dox-brand-citrinitas); /* fill; pair with on-warning */
+				--dox-status-output: var(--dox-brand-gold); /* fill; pair with on-output */
+				--dox-status-neutral: var(--dox-brand-ash); /* fill; pair with on-neutral */
+				--dox-text-on-running: var(--dox-brand-paper);
+				--dox-text-on-warning: var(--dox-brand-nigredo);
+				--dox-text-on-output: var(--dox-brand-nigredo);
+				--dox-text-on-neutral: var(--dox-brand-nigredo);
+				--dox-radius-sm: 4px;
+				--dox-radius: 8px;
+				--dox-radius-pill: 999px;
+				--dox-shadow-sm: 0 3px 12px rgb(22 19 15 / 12%);
+				--dox-shadow: 0 10px 34px rgb(22 19 15 / 18%);
+
+				/* Instrument + Folio composition. Frame roles stay nigredo; work roles invert. */
+				--dox-frame-ground: var(--dox-brand-nigredo);
+				--dox-frame-surface: var(--dox-ink-900);
+				--dox-frame-surface-raised: var(--dox-ink-800);
+				--dox-frame-text: var(--dox-brand-paper);
+				--dox-frame-text-muted: var(--dox-ink-400);
+				--dox-frame-rule: color-mix(in srgb, var(--dox-brand-paper) 17%, transparent);
+				--dox-work-surface: var(--dox-brand-paper);
+				--dox-work-surface-raised: #F5EEDC;
+				--dox-work-text: var(--dox-brand-nigredo);
+				--dox-work-text-muted: var(--dox-ink-700);
+				--dox-work-rule: color-mix(in srgb, var(--dox-brand-nigredo) 22%, transparent);
+				--dox-work-shadow: 0 12px 36px rgb(0 0 0 / 35%);
+				--dox-tracking: 0.02em;
+				--dox-tracking-caps: 0.16em;
+			}
+
+			/* Single inversion hook: add or remove dox-invert on body; no component changes. */
+			body.dox-invert {
+				--dox-ground: var(--dox-brand-nigredo);
+				--dox-surface: #1C1813;
+				--dox-surface-raised: #29241D;
+				--dox-text-primary: var(--dox-brand-paper);
+				--dox-text-secondary: var(--dox-ink-300);
+				--dox-text-muted: var(--dox-brand-ash);
+				--dox-text-accent: var(--dox-brand-gold-hi);
+				--dox-text-accent-display: var(--dox-brand-gold-hi);
+				--dox-focus: var(--dox-brand-citrinitas); /* 3:1+ against nigredo surfaces */
+				--dox-rule: color-mix(in srgb, var(--dox-brand-paper) 15%, transparent);
+				--dox-rule-strong: color-mix(in srgb, var(--dox-brand-paper) 28%, transparent);
+				--dox-shadow-sm: 0 3px 12px rgb(0 0 0 / 40%);
+				--dox-shadow: 0 10px 34px rgb(0 0 0 / 50%);
+				--dox-work-surface: var(--dox-ink-900);
+				--dox-work-surface-raised: var(--dox-ink-800);
+				--dox-work-text: var(--dox-brand-paper);
+				--dox-work-text-muted: var(--dox-ink-300);
+				--dox-work-rule: color-mix(in srgb, var(--dox-brand-paper) 20%, transparent);
+				--dox-work-shadow: 0 12px 36px rgb(0 0 0 / 55%);
+			}
+			*, *::before, *::after {
+				box-sizing: border-box;
+			}
+
+			html, body {
+				margin: 0;
+				min-width: 0;
+				min-height: 100%;
+			}
+
+			body {
+				background: var(--dox-frame-ground);
+				color: var(--dox-text-primary);
+				font-family: var(--dox-font-display);
+				font-size: 1rem;
+				line-height: 1.45;
+				overflow-x: hidden;
+			}
+
+			button, input, select, textarea {
+				font-family: var(--dox-font-mono);
+			}
+
+			.prose, article, blockquote {
+				font-family: var(--dox-font-body);
+			}
+
+			:focus-visible {
+				outline: 2px solid var(--dox-focus);
+				outline-offset: 2px;
+			}
+		</style>
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>

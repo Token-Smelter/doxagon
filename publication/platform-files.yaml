@@ -1,0 +1,168 @@
+# Reviewed public platform paths. New documentation and scripts need explicit
+# inclusion; unreviewed files fail the repository check. Code/test directories
+# are included as trees, so their contents still require privacy review.
+#
+# Keep real project assets, prompts, notes, session records and acceptance
+# evidence in a private vault. Run:
+#   python scripts/build_platform_tree.py --check
+# This checks tracked paths and links, not Git history or GitHub metadata.
+
+format: 1
+include:
+- src/doxagon/**
+- apps/**
+- tests/**
+- factory/**
+- scripts/__init__.py
+- scripts/dox.py
+- scripts/search.py
+- scripts/tests/**
+- scripts/build_platform_tree.py
+- scripts/prepare_streaming_document.py
+- scripts/preview_document_player.py
+- scripts/preview_streaming_document.py
+- scripts/verify_document_adoption.py
+- scripts/verify_document_skills.py
+- bin/dox
+- publication/**
+- pyproject.toml
+- uv.lock
+- MANIFEST.in
+- Dockerfile
+- docker-compose.yaml
+- .gitignore
+- .github/workflows/publication-boundary.yml
+- LICENSE
+- NOTICE
+- TRADEMARKS.md
+- README.md
+- docs/DEV_TASKS_ARCHITECTURE.md
+- docs/EXTRACTION_ARCHITECTURE.md
+- docs/EXTRACTION_QUICK_REF.md
+- docs/GRAPH_INTEGRITY.md
+- docs/HTML_FIRST_PRESENTATIONS.md
+- docs/HTML_SLIDES_DESIGN.md
+- docs/KNOWLEDGE_TO_PRESENTATION_ARCHITECTURE.md
+- docs/PRIVATE_VAULT_THREAT_MODEL.md
+- docs/SLIDE_ARCHITECTURE.md
+- docs/VISUAL_SYSTEM_ARCHITECTURE.md
+- docs/document-authoring.md
+- docs/image-providers.md
+- docs/modernization.md
+- docs/document-inspection.md
+- docs/document-playback.md
+- docs/image-generation-details.md
+- docs/platform-publication.md
+- docs/images/presentation-workspace/document-notes.png
+- docs/images/presentation-workspace/document-player-desktop.png
+- docs/images/presentation-workspace/document-player-mobile.png
+- docs/images/presentation-workspace/presentation-workspace-desktop.png
+- docs/images/presentation-workspace/presentation-workspace-mobile.png
+- docs/streaming-documents.md
+- src/doxagon/resources/skills/**
+- src/doxagon/resources/AGENTS.md
+forbidden:
+- library/**
+- theses/**
+- design/**
+- .dev/**
+- .arena/**
+- .triad/**
+- .deep-research/**
+- .sourcerer/**
+- .dag-orchestrator/**
+- .cache/**
+- .private-scratch/**
+- .claude/**
+- .pi/**
+- publish/**
+- AGENTS.md
+- CLAUDE.md
+- CLAUDE_LOG.md
+- '-'
+- -*
+- .doxagon-*.pid
+- ddg*.py
+- get_*.py
+- temp_*.py
+- temp.html
+- temp_output.txt
+- summarize_ast*.py
+- summary*.txt
+- run_agent_raw.py
+- run_search.py
+- search_ddg.py
+- my_search.py
+- parse_html.py
+- resolve_urls.py
+- clean_output.py
+- clean_output.txt
+- cleaned.txt
+- test_ddg.py
+- response-diagram.png
+- response-to-agent-tools.md
+- knowledge/**
+- projects/**
+- archives/**
+- HANDOFF.md
+- .env
+- .env.*
+- '**/.env'
+- '**/.env.*'
+- '*.pem'
+- '**/*.pem'
+- '*.key'
+- '**/*.key'
+- '**/credentials.json'
+- '**/service-account*.json'
+deferred: []
+# Per-path exceptions to one content-scan rule each. A fixture that must
+# contain the shape of private material to prove the platform refuses it is
+# the intended use; a real secret is never an allowance.
+content_allowances:
+- path: tests/test_presentations_public.py
+  rule: operator-home-path
+  reason: Synthetic leak fixture asserting public projection refuses home paths.
+# The scanner's own test must contain one synthetic example per rule to prove
+# each rule fires. Listing them individually keeps every exception reviewed;
+# a new rule fails this check until someone decides the fixture needs it too.
+- path: tests/test_platform_publication.py
+  rule: pem-private-key
+  reason: Synthetic detection fixture.
+- path: tests/test_platform_publication.py
+  rule: aws-access-key
+  reason: Synthetic detection fixture.
+- path: tests/test_platform_publication.py
+  rule: github-token
+  reason: Synthetic detection fixture.
+- path: tests/test_platform_publication.py
+  rule: slack-token
+  reason: Synthetic detection fixture.
+- path: tests/test_platform_publication.py
+  rule: google-api-key
+  reason: Synthetic detection fixture.
+- path: tests/test_platform_publication.py
+  rule: model-provider-key
+  reason: Synthetic detection fixture.
+- path: tests/test_platform_publication.py
+  rule: cloud-project-id
+  reason: Synthetic detection fixture.
+- path: tests/test_platform_publication.py
+  rule: operator-home-path
+  reason: Synthetic detection fixture.
+- path: tests/test_platform_publication.py
+  rule: internal-identity
+  reason: Synthetic detection fixture.
+- path: tests/test_platform_publication.py
+  rule: orchestration-id
+  reason: Synthetic detection fixture.
+- path: tests/test_platform_publication.py
+  rule: orchestration-trailer
+  reason: Synthetic detection fixture.
+required_before_public:
+- path: LICENSE
+  reason: Redistribution terms.
+- path: NOTICE
+  reason: Required attribution notices.
+- path: README.md
+  reason: Public platform setup and overview.

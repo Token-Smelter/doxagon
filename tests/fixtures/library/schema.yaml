@@ -1,0 +1,31 @@
+# Test schema - minimal version for fixtures
+node_types:
+  doxa:
+    prefix: "d-"
+    location: "library/doxai/"
+    description: "A belief with evidence"
+  evidence:
+    prefix: "e-"
+    location: "library/evidence/"
+    description: "Source/testimony"
+  diegesis:
+    prefix: "n-"
+    location: "library/diegeses/"
+    description: "Argument structure"
+
+edge_types:
+  supports:
+    description: "Source provides reason to accept target"
+    inverse: "is supported by"
+  elaborates:
+    description: "Source adds detail to target"
+    inverse: "is elaborated by"
+  contradicts:
+    description: "Source and target are in tension"
+    symmetric: true
+
+tag_prefixes:
+  domain:
+    controlled: true
+    values: [test, secondary, orphan]
+    description: "Test domains"

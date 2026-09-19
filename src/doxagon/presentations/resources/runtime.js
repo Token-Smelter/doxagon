@@ -1,0 +1,1039 @@
+/**
+ * doxagon-presentation-runtime/2 — the one checkpoint runtime.
+ *
+ * These bytes are the only runtime. Workspace preview, presenter, audience,
+ * agent before/after capture, raster export, and the self-contained offline
+ * export all load this exact file, so a state proved here is the state every
+ * other surface produces.
+ *
+ * Checkpoints reconstruct directly in opaque-origin sandboxes. Explicit scene
+ * membership also permits authored transitions to retain a realm between named
+ * states. Jumps, interruptions, and failed transitions reconstruct from pinned
+ * bytes; no scene receives host DOM, ambient network, or undeclared authority.
+ * Sampled tracks receive latest-value continuous progress without advancing
+ * the session cursor.
+ *
+ * A checkpoint may instead declare document mode, where the realm is the whole
+ * page: it keeps its own viewport, scrolls itself, and therefore owns the
+ * geometry that selects cues. The host never measures author DOM; it receives
+ * cue notifications and asks the realm to travel. Sticky positioning, viewport
+ * units, and full-bleed layout keep working because the author's document is a
+ * real document in a real viewport.
+ */
+
+export const RUNTIME_VERSION = 'doxagon-presentation-runtime/2';
+export const CURSOR_SCHEMA = 'doxagon.deck-cursor/2';
+export const SNAPSHOT_SCHEMA = 'doxagon.presentation-snapshot/2';
+
+/**
+ * Host APIs the realm withdraws. Every name here is withdrawn whether or not
+ * the capability was granted: a grant buys a tracked broker operation, never
+ * the raw global. Leaving the raw API reachable for a granted capability is
+ * what let a brokered handle escape lifecycle accounting.
+ */
+const CAPABILITY_SURFACE = {
+    network: ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource'],
+    timers: ['setTimeout', 'setInterval', 'requestAnimationFrame', 'queueMicrotask'],
+    storage: ['localStorage', 'sessionStorage', 'indexedDB', 'caches'],
+    media: ['Audio', 'MediaRecorder'],
+    clipboard: [],
+    worker: ['Worker', 'SharedWorker'],
+    export: ['print'],
+};
+
+/**
+ * The capabilities this realm can actually broker.
+ *
+ * The realm is an opaque-origin `allow-scripts` sandbox under a fixed
+ * `default-src 'none'; connect-src 'none'` policy, so `network` and `storage`
+ * have no reachable implementation here at all, `clipboard` needs a same-origin
+ * secure context the realm deliberately does not have, and `export` (`print`)
+ * needs `allow-modals`. Advertising those as grantable would be a hollow grant:
+ * the workspace would report "granted" for a capability nothing can honour.
+ * They are therefore outside the grant vocabulary
+ * (`src/doxagon/presentations/contracts.py` `CAPABILITIES`) and a payload that
+ * still carries one is refused below rather than presented.
+ */
+export const BROKERED_CAPABILITIES = Object.freeze(['media', 'timers', 'worker']);
+
+const EXIT_TIMEOUT_MS = 4000;
+const TRANSITION_TIMEOUT_MS = 30000;
+const CANCEL_TIMEOUT_MS = 100;
+
+export class RuntimeError extends Error {
+    constructor(code, message, detail = {}) {
+        super(message);
+        this.name = 'RuntimeError';
+        this.code = code;
+        this.detail = detail;
+    }
+}
+
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[character]));
+
+/** Carry a module's exact bytes to the realm without a resolvable origin. */
+function dataModule(source) {
+    const bytes = new TextEncoder().encode(source);
+    let binary = '';
+    for (let index = 0; index < bytes.length; index += 0x8000) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(index, index + 0x8000));
+    }
+    return `data:text/javascript;base64,${btoa(binary)}`;
+}
+
+/**
+ * The realm program, injected verbatim into every checkpoint sandbox.
+ *
+ * It is a string rather than a module because the realm must be built from the
+ * revision's own bytes with no resolvable origin to import from: an import
+ * would be code the revision never pinned.
+ *
+ * The program is its own module script, loaded before the author module script
+ * and never concatenated with it. Broker state — the raw host APIs, the handle
+ * registry, the host reference, and the reply channel — lives in this module's
+ * scope, which no other module can name. Author code receives exactly one
+ * frozen context object and nothing else.
+ */
+const REALM_PROGRAM = String.raw`
+/* Every identifier here is prefixed so the diff against the previous
+ * single-module realm stays readable; the isolation is the separate module,
+ * not the prefix. */
+const __doxHost = window.parent;
+const __doxGrants = new Set(__GRANTS__);
+let __doxCheckpointId = __CHECKPOINT_ID__;
+const __doxRevision = __DECK_REVISION__;
+const __doxOpen = new Map();
+let __doxHandleSeq = 0;
+let __doxDenied = null;
+
+/* Captured before withdrawal, because withdrawal replaces these globals for
+ * author code. The broker is the only holder of the raw APIs from here on. */
+const __doxBind = (name) => (typeof window[name] === 'function' ? window[name].bind(window) : null);
+const __doxRaw = {
+    setTimeout: __doxBind('setTimeout'),
+    clearTimeout: __doxBind('clearTimeout'),
+    setInterval: __doxBind('setInterval'),
+    clearInterval: __doxBind('clearInterval'),
+    requestAnimationFrame: __doxBind('requestAnimationFrame'),
+    cancelAnimationFrame: __doxBind('cancelAnimationFrame'),
+    Worker: typeof window.Worker === 'function' ? window.Worker : null,
+    Audio: typeof window.Audio === 'function' ? window.Audio : null,
+};
+
+function __doxRecord(kind, close) {
+    if (__doxController.signal.aborted) {
+        close();
+        throw new Error('PRES_REALM_CLOSED');
+    }
+    const id = __doxCheckpointId + ':' + (__doxHandleSeq += 1);
+    __doxOpen.set(id, { kind, close });
+    return id;
+}
+
+function __doxRelease(id) {
+    const entry = __doxOpen.get(id);
+    if (entry === undefined) return;
+    __doxOpen.delete(id);
+    try { entry.close(); } catch (error) { /* a closed handle stays closed */ }
+}
+
+function __doxDeny(capability, api) {
+    __doxDenied = __doxDenied || { capability, api, reason: 'ungranted' };
+    throw new Error('PRES_CAPABILITY_DENIED: ' + capability + ' (' + api + ') was not granted to ' + __doxCheckpointId);
+}
+
+function __doxUnbrokered(capability, api) {
+    __doxDenied = __doxDenied || { capability, api, reason: 'unbrokered' };
+    throw new Error(
+        'PRES_CAPABILITY_UNBROKERED: ' + capability + ' (' + api + ') is granted to ' + __doxCheckpointId
+        + ' only through context.capabilities, never the host API',
+    );
+}
+
+/* Denied by default and brokered-only when granted: every host API in the
+ * surface is replaced by a throwing stub before author code exists. An
+ * ungranted call reports the denial; a granted call reports that the grant is
+ * reachable only through the broker. Neither can degrade into an unbrokered
+ * side effect, and no granted handle can escape lifecycle accounting. */
+const __doxSurface = __SURFACE__;
+for (const capability of Object.keys(__doxSurface)) {
+    const granted = __doxGrants.has(capability);
+    for (const api of __doxSurface[capability]) {
+        try {
+            Object.defineProperty(window, api, {
+                configurable: true,
+                get() { return () => (granted ? __doxUnbrokered(capability, api) : __doxDeny(capability, api)); },
+            });
+        } catch (error) { /* a non-configurable global is already inert here */ }
+    }
+}
+/* Clipboard is outside the grant vocabulary, so this withdrawal is
+ * unconditional rather than grant-dependent. */
+try { Object.defineProperty(navigator, 'clipboard', { configurable: true, get() { __doxDeny('clipboard', 'navigator.clipboard'); } }); }
+catch (error) { /* absent in this realm */ }
+
+const __doxAssets = new Map();
+for (const asset of __ASSETS__) {
+    __doxAssets.set(asset.id, Object.freeze({
+        id: asset.id,
+        label: asset.label,
+        alt: asset.alt,
+        mediaType: asset.media_type,
+        /* A handle exposes approved bytes, never a path or a storage key. */
+        url: () => 'data:' + asset.media_type + ';base64,' + asset.base64,
+    }));
+}
+
+/* Granted capabilities arrive only through brokered, revision-scoped handles
+ * whose every acquisition and release is auditable and force-closable. Every
+ * operation below returns the handle id that closes it, so an author can
+ * release what it opened and exit can prove what it did not. */
+const __doxBroker = {
+    get checkpointId() { return __doxCheckpointId; },
+    deckRevision: __doxRevision,
+    granted: (capability) => __doxGrants.has(capability),
+    timeout(callback, delay) {
+        if (!__doxGrants.has('timers')) __doxDeny('timers', 'setTimeout');
+        let id = null;
+        const handle = __doxRecord('timers', () => { if (id !== null) __doxRaw.clearTimeout(id); });
+        id = __doxRaw.setTimeout(() => { __doxRelease(handle); callback(); }, delay);
+        return handle;
+    },
+    interval(callback, delay) {
+        if (!__doxGrants.has('timers')) __doxDeny('timers', 'setInterval');
+        let id = null;
+        const handle = __doxRecord('timers', () => { if (id !== null) __doxRaw.clearInterval(id); });
+        id = __doxRaw.setInterval(callback, delay);
+        return handle;
+    },
+    frame(callback) {
+        if (!__doxGrants.has('timers')) __doxDeny('timers', 'requestAnimationFrame');
+        let id = null;
+        const handle = __doxRecord('timers', () => { if (id !== null) __doxRaw.cancelAnimationFrame(id); });
+        id = __doxRaw.requestAnimationFrame((time) => { __doxRelease(handle); callback(time); });
+        return handle;
+    },
+    worker(source) {
+        if (!__doxGrants.has('worker')) __doxDeny('worker', 'Worker');
+        const worker = new __doxRaw.Worker(source);
+        const handle = __doxRecord('worker', () => worker.terminate());
+        return { handle, worker };
+    },
+    /* Media is brokered over an approved asset rather than a free URL: the
+     * realm's media-src data: policy admits nothing else, and an asset id
+     * keeps the closure the same one the payload pinned. */
+    audio(assetId) {
+        if (!__doxGrants.has('media')) __doxDeny('media', 'Audio');
+        const asset = __doxAssets.get(assetId);
+        if (asset === undefined) throw new Error('PRES_ASSET_UNKNOWN: ' + assetId);
+        const audio = new __doxRaw.Audio(asset.url());
+        const handle = __doxRecord('media', () => { audio.pause(); audio.removeAttribute('src'); });
+        return { handle, audio };
+    },
+    release: __doxRelease,
+    openHandles: () => Array.from(__doxOpen.values(), (entry) => entry.kind).sort(),
+};
+
+Object.freeze(__doxBroker);
+
+const __doxController = new AbortController();
+const __doxContext = Object.freeze({
+    get checkpointId() { return __doxCheckpointId; },
+    sceneId: __SCENE_ID__,
+    deckRevision: __doxRevision,
+    root: document.getElementById('doxagon-checkpoint-root'),
+    assets: __doxAssets,
+    capabilities: __doxBroker,
+    signal: __doxController.signal,
+    reducedMotion: __REDUCED_MOTION__,
+});
+
+let __doxInstance = null;
+let __doxTransition = null;
+let __doxCue = null;
+let __doxTravelling = null;
+let __doxReadingLine = 0.5;
+let __doxWatching = false;
+
+/* An author's cue or sample handler runs on every frame, so a throw must not
+ * become a silent nothing-happens. It is reported once, to the host, as a
+ * diagnostic the workspace can show. */
+let __doxObserverError = null;
+function __doxObserverFailed(kind, error) {
+    const message = kind + '(): ' + String(error && error.message ? error.message : error);
+    if (__doxObserverError === message) return;
+    __doxObserverError = message;
+    __doxHost.postMessage({ type: 'diagnostic', message }, '*');
+}
+
+/* Document mode measures inside the realm, because only the realm knows where
+ * the author's own scrolling put things. Nothing is reported to the host until
+ * the selected cue actually changes. */
+function __doxCueElements() {
+    return Array.from(document.querySelectorAll('[data-cue]'));
+}
+
+function __doxSelectCue() {
+    const line = window.innerHeight * __doxReadingLine;
+    let selected = null;
+    for (const element of __doxCueElements()) {
+        if (element.getBoundingClientRect().top <= line) selected = element.dataset.cue;
+    }
+    return selected;
+}
+
+function __doxReportCues() {
+    const selected = __doxSelectCue();
+    // A travel the host asked for owns the cue until the scroll it started has
+    // settled there. Reporting an intermediate position would answer the host's
+    // own request with the place it was leaving.
+    if (__doxTravelling !== null) {
+        if (selected !== __doxTravelling) return;
+        __doxTravelling = null;
+    }
+    if (selected !== null && selected !== __doxCue) {
+        __doxCue = selected;
+        if (typeof __doxInstance?.cue === 'function') {
+            try { __doxInstance.cue({ cue: selected }); } catch (error) { __doxObserverFailed('cue', error); }
+        }
+        __doxHost.postMessage({ type: 'cue', cue: selected }, '*');
+    }
+    const line = window.innerHeight * __doxReadingLine;
+    for (const element of document.querySelectorAll('[data-track]')) {
+        const box = element.getBoundingClientRect();
+        if (box.top <= line && box.bottom >= line && box.height > 0 && typeof __doxInstance?.sample === 'function') {
+            const progress = Math.min(1, Math.max(0, (line - box.top) / box.height));
+            // Read the frozen context rather than the substitution token: the
+            // token is replaced once, so a second use would be a bare identifier.
+            try { __doxInstance.sample({ track: element.dataset.track, progress, reducedMotion: __doxContext.reducedMotion }); }
+            catch (error) { __doxObserverFailed('sample', error); }
+        }
+    }
+}
+
+function __doxWatchCues() {
+    if (__doxWatching) return;
+    __doxWatching = true;
+    let pending = false;
+    const schedule = () => {
+        if (pending || __doxRaw.requestAnimationFrame === null) return;
+        pending = true;
+        __doxRaw.requestAnimationFrame(() => { pending = false; __doxReportCues(); });
+    };
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    __doxReportCues();
+}
+
+/* The author module is a separate module script that cannot see this scope, so
+ * it hands its factory over through one registrar rather than a shared
+ * binding. The registrar is the only thing this program puts on the realm's
+ * global object, it accepts exactly one factory, and it is withdrawn once the
+ * document has finished executing its scripts. */
+let __doxFactory = null;
+let __doxSettleFactory = null;
+const __doxRegistered = new Promise((resolve) => { __doxSettleFactory = resolve; });
+Object.defineProperty(window, '__doxagonRegisterCheckpoint', {
+    configurable: true,
+    writable: false,
+    value: (factory) => {
+        if (__doxFactory === null && typeof factory === 'function') __doxFactory = factory;
+    },
+});
+
+async function __doxHandle(message) {
+    switch (message.type) {
+        case 'create': {
+            const factory = await __doxRegistered;
+            if (typeof factory !== 'function') {
+                throw new Error('PRES_CHECKPOINT_REGISTRATION_INVALID: the entry module registered no create()');
+            }
+            __doxInstance = await factory(__doxContext);
+            if (__doxInstance === null || typeof __doxInstance !== 'object') {
+                throw new Error('PRES_CHECKPOINT_REGISTRATION_INVALID: create() returned no instance');
+            }
+            return { created: true };
+        }
+        case 'enter':
+            await __doxInstance.enter();
+            return { entered: true };
+        case 'transition': {
+            if (typeof __doxInstance.transition !== 'function') return { transitioned: false };
+            if (__doxTransition !== null) throw new Error('PRES_TRANSITION_BUSY');
+            const controller = new AbortController();
+            __doxTransition = controller;
+            try {
+                const result = await __doxInstance.transition(Object.freeze({
+                    ...message.transition,
+                    signal: controller.signal,
+                    reducedMotion: __doxContext.reducedMotion,
+                }));
+                if (controller.signal.aborted) throw new Error('PRES_NAVIGATION_CANCELLED');
+                if (result === false) return { transitioned: false };
+                __doxCheckpointId = message.transition.to;
+                return { transitioned: true };
+            } finally {
+                controller.abort('completed');
+                __doxTransition = null;
+            }
+        }
+        case 'cancel': {
+            __doxController.abort();
+            if (__doxTransition !== null) __doxTransition.abort('cancelled');
+            // Force-close even when author exit never settles.
+            for (const id of Array.from(__doxOpen.keys())) __doxRelease(id);
+            if (__doxInstance !== null) await __doxInstance.exit();
+            return { cancelled: true };
+        }
+        /* Continuous input is content, not navigation: a sample never assigns
+         * __doxCheckpointId, so it never moves the cursor. */
+        case 'sample': {
+            if (typeof __doxInstance.sample !== 'function') return { sampled: false };
+            const progress = Math.min(1, Math.max(0, Number(message.progress) || 0));
+            await __doxInstance.sample(Object.freeze({ track: String(message.track), progress, reducedMotion: __doxContext.reducedMotion }));
+            return { sampled: true };
+        }
+        case 'viewport':
+            return { viewport: { innerWidth: window.innerWidth, innerHeight: window.innerHeight, scrollY: window.scrollY, scrollHeight: (document.scrollingElement || document.documentElement).scrollHeight } };
+        case 'observe': {
+            /* Cue watching needs no grant: it reads this realm's own layout and
+             * calls this realm's own instance. It is not a host capability. */
+            if (typeof message.readingLine === 'number') __doxReadingLine = message.readingLine;
+            __doxWatchCues();
+            return { observing: true, cues: __doxCueElements().map((element) => element.dataset.cue), cue: __doxCue };
+        }
+        case 'travel': {
+            // Concatenated, not interpolated: this program travels inside a
+            // String.raw template, so host interpolation must find nothing here.
+            const element = document.querySelector('[data-cue="' + CSS.escape(String(message.cue)) + '"]');
+            if (element === null) return { travelled: false };
+            const top = window.scrollY + element.getBoundingClientRect().top - window.innerHeight * __doxReadingLine + 2;
+            __doxTravelling = String(message.cue);
+            window.scrollTo({ top, behavior: message.smooth === false ? 'auto' : 'smooth' });
+            /* Report from the destination rather than waiting for a scroll event,
+             * so a caller learns the cue it asked for even with smooth scrolling
+             * still in flight. */
+            __doxCue = String(message.cue);
+            if (typeof __doxInstance?.cue === 'function') {
+                try { __doxInstance.cue({ cue: __doxCue }); } catch (error) { __doxObserverFailed('cue', error); }
+            }
+            // Announce the arrival: a smooth scroll that settles without
+            // changing the selection would otherwise tell the host nothing.
+            __doxHost.postMessage({ type: 'cue', cue: __doxCue }, '*');
+            return { travelled: true, cue: __doxCue };
+        }
+        case 'signature':
+            return { signature: String(__doxInstance.signature()) };
+        case 'inspect':
+            return { inspect: typeof __doxInstance.inspect === 'function' ? __doxInstance.inspect() : null };
+        case 'scroll': {
+            /* The realm owns its own overflow, so scroll geometry is reported
+             * from inside it: preview and export read the same numbers. */
+            const element = document.scrollingElement || document.documentElement;
+            return { scroll: { scrollTop: element.scrollTop, scrollHeight: element.scrollHeight, clientHeight: element.clientHeight } };
+        }
+        case 'exit': {
+            __doxController.abort();
+            await __doxInstance.exit();
+            /* Closure is proved, not promised: whatever the checkpoint left
+             * open is reported before the realm is destroyed. */
+            const leaked = __doxBroker.openHandles();
+            for (const id of Array.from(__doxOpen.keys())) __doxRelease(id);
+            return { exited: true, leaked };
+        }
+        default:
+            throw new Error('PRES_RUNTIME_PROTOCOL: unknown host message ' + message.type);
+    }
+}
+
+/* Host traffic runs over a private MessageChannel, not over the realm's window.
+ * A window message is readable and forgeable by any listener in this realm, so
+ * a checkpoint could both read the host's requests and answer them. The port is
+ * held only here and by the host; author code has no reference to it and no way
+ * to obtain one. */
+const __doxChannel = new MessageChannel();
+const __doxPort = __doxChannel.port1;
+__doxPort.onmessage = (event) => {
+    const message = event.data;
+    if (message === null || typeof message !== 'object') return;
+    __doxHandle(message).then(
+        (payload) => __doxPort.postMessage({ id: message.id, ok: true, ...payload }),
+        (error) => __doxPort.postMessage({
+            id: message.id,
+            ok: false,
+            error: String(error && error.message ? error.message : error),
+            denied: __doxDenied,
+        }),
+    );
+};
+
+/* Announced from this module, which the document executes before the author
+ * module: the host adopts the first port this realm offers, so a checkpoint
+ * cannot pre-empt the channel with a port of its own. */
+__doxHost.postMessage({ type: 'ready' }, '*', [__doxChannel.port2]);
+
+/* Registration closes when the document's scripts have all run. A checkpoint
+ * whose entry never registered resolves to null and fails 'create' with a named
+ * error instead of hanging the host. */
+const __doxSealRegistration = () => {
+    if (__doxSettleFactory === null) return;
+    const settle = __doxSettleFactory;
+    __doxSettleFactory = null;
+    delete window.__doxagonRegisterCheckpoint;
+    settle(__doxFactory);
+};
+if (document.readyState === 'complete') __doxSealRegistration();
+else {
+    window.addEventListener('DOMContentLoaded', __doxSealRegistration, { once: true });
+    window.addEventListener('load', __doxSealRegistration, { once: true });
+}
+`;
+
+/* A checkpoint realm is a local-scheme child, so it inherits the host
+ * document's policy. The realm program is therefore loaded from a data: URL
+ * rather than inlined: the host can keep a hash-pinned `script-src` for its own
+ * shell and still admit realm programs, which are the revision's own bytes. */
+const CSP = [
+    "default-src 'none'",
+    "script-src data:",
+    "style-src 'unsafe-inline'",
+    'img-src data:',
+    'media-src data:',
+    'font-src data:',
+    "connect-src 'none'",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+].join('; ');
+
+const REDUCED_MOTION_CSS = `@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}`;
+
+/**
+ * The bytes appended to an author entry so it can hand its factory to the
+ * broker. This is the whole interface between the two module scopes.
+ */
+const AUTHOR_EPILOGUE = '\n;window.__doxagonRegisterCheckpoint(create);\n';
+
+/**
+ * Compose the exact document one checkpoint realm is built from.
+ *
+ * Exported so the offline exporter and the workspace preview compose identical
+ * bytes; a second composer would be a second runtime.
+ */
+/** Whether this checkpoint's realm is the whole page rather than a stage. */
+export const isDocument = (checkpoint) => checkpoint?.mode === 'document';
+
+export function composeRealmDocument(checkpoint, { deckRevision, reducedMotion }) {
+    const unbrokered = (checkpoint.capabilities || []).filter((item) => !BROKERED_CAPABILITIES.includes(item));
+    if (unbrokered.length > 0) {
+        // Fail closed rather than build a realm that reports a grant it cannot
+        // honour. A hollow grant reads as "granted" everywhere and does nothing.
+        throw new RuntimeError(
+            'PRES_CAPABILITY_UNBROKERED',
+            `checkpoint ${checkpoint.id} is granted ${unbrokered[0]}, which this realm cannot broker`,
+            { checkpointId: checkpoint.id, capabilities: unbrokered },
+        );
+    }
+    const modules = Array.isArray(checkpoint.modules) ? checkpoint.modules : [];
+    for (const module of modules) {
+        if (module === null || typeof module !== 'object' || typeof module.path !== 'string' || typeof module.source !== 'string') {
+            throw new RuntimeError(
+                'PRES_RUNTIME_MODULE_INVALID',
+                `checkpoint ${checkpoint.id} carries an invalid registered module`,
+                { checkpointId: checkpoint.id },
+            );
+        }
+    }
+    const program = REALM_PROGRAM
+        .replace('__GRANTS__', JSON.stringify(checkpoint.capabilities || []))
+        .replace('__ASSETS__', JSON.stringify(checkpoint.assets || []))
+        .replace('__CHECKPOINT_ID__', JSON.stringify(checkpoint.id))
+        .replace('__SCENE_ID__', JSON.stringify(checkpoint.scene || null))
+        .replace('__DECK_REVISION__', JSON.stringify(deckRevision))
+        .replace('__REDUCED_MOTION__', JSON.stringify(Boolean(reducedMotion)))
+        .replace('__SURFACE__', JSON.stringify(CAPABILITY_SURFACE));
+    return [
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">',
+        `<meta http-equiv="Content-Security-Policy" content="${escapeHtml(CSP)}">`,
+        `<style>${REDUCED_MOTION_CSS}\n${checkpoint.styles || ''}</style>`,
+        // A document-mode realm owns the page: its root is the body itself, so
+        // the author's sticky, viewport-unit, and full-bleed layout behaves the
+        // way it would if the page were served on its own.
+        `</head><body${isDocument(checkpoint) ? ' data-doxagon-document="true"' : ''}><div id="doxagon-checkpoint-root"${isDocument(checkpoint) ? ' style="display:contents"' : ''}>`,
+        checkpoint.document || '',
+        '</div>',
+        // Registered modules execute only after the broker has withdrawn the
+        // raw host APIs and before the entry receives its context. Their bytes
+        // came from the validated revision payload; no path is resolved here.
+        `<script type="module" src="${dataModule(program)}"><\/script>`,
+        ...modules.map((module) => `<script type="module" data-module="${escapeHtml(module.path)}" src="${dataModule(module.source)}"><\/script>`),
+        `<script type="module" src="${dataModule(`${checkpoint.entry}${AUTHOR_EPILOGUE}`)}"><\/script>`,
+        '</body></html>',
+    ].join('');
+}
+
+/** Order-only navigation: the edge table, never a counter or a slide boundary. */
+export function resolveAction(deck, checkpointId, action) {
+    const order = deck.checkpoint_order;
+    if (!order.includes(checkpointId)) {
+        throw new RuntimeError('PRES_CHECKPOINT_UNKNOWN', `${checkpointId} is not in revision ${deck.revision}`);
+    }
+    switch (action.type) {
+        case 'SEEK':
+            if (!order.includes(action.checkpointId)) {
+                throw new RuntimeError('PRES_CHECKPOINT_UNKNOWN', `${action.checkpointId} is not in revision ${deck.revision}`);
+            }
+            return action.checkpointId;
+        case 'HOME':
+            return order[0];
+        case 'END':
+            return order[order.length - 1];
+        case 'NEXT': {
+            const edge = deck.edges.find((item) => item.from === checkpointId);
+            return edge === undefined ? null : edge.to;
+        }
+        case 'PREVIOUS': {
+            // Back traverses the reverse half of a registered edge; there is no
+            // "previous DOM state" and no decrementing counter.
+            const edge = deck.edges.find((item) => item.to === checkpointId);
+            return edge === undefined ? null : edge.from;
+        }
+        default:
+            throw new RuntimeError('PRES_RUNTIME_ACTION_UNKNOWN', `unknown action ${action.type}`);
+    }
+}
+
+/** Reject a foreign revision, a stale (epoch, sequence), or a forked pair. */
+export function acceptsSnapshot(current, candidate, deckRevision, sessionId) {
+    if (candidate.schema !== SNAPSHOT_SCHEMA) return false;
+    if (candidate.deck_revision !== deckRevision || candidate.session_id !== sessionId) return false;
+    if (current === null || current === undefined) return true;
+    if (candidate.epoch !== current.epoch) return candidate.epoch > current.epoch;
+    // A cue is part of the position a client renders, so an equal pair that
+    // names a different one is a fork rather than a repeat.
+    if (candidate.sequence === current.sequence) {
+        return candidate.checkpoint_id === current.checkpoint_id && (candidate.cue ?? null) === (current.cue ?? null);
+    }
+    return candidate.sequence > current.sequence;
+}
+
+/**
+ * One revision's navigation executor. Relative moves can retain an explicit
+ * scene; absolute seeks always reconstruct. The runtime never fetches or
+ * resolves authored paths.
+ */
+export function createDeckRuntime({ deck, mount, reducedMotion = false, onState = () => {}, onCue = () => {} }) {
+    if (deck.runtime_version !== RUNTIME_VERSION) {
+        throw new RuntimeError(
+            'PRES_RUNTIME_VERSION_MISMATCH',
+            `deck was composed for ${deck.runtime_version}, not ${RUNTIME_VERSION}`,
+        );
+    }
+    const checkpoints = new Map(deck.checkpoints.map((item) => [item.id, item]));
+    const signatures = new Map();
+    let active = null;
+    let sequence = 0;
+    let pending = Promise.resolve();
+    let generation = 0;
+    let running = null;
+    let sampling = null;      // the in-flight sample promise
+    let latestSample = null;  // newest (track, progress) waiting; older ones are dropped
+    let destroyed = false;
+    let snapshot = null;
+
+    const cancelled = () => new RuntimeError('PRES_NAVIGATION_CANCELLED', 'navigation was superseded');
+
+    const state = () => ({
+        schema: CURSOR_SCHEMA,
+        deckRevision: deck.revision,
+        sequence,
+        checkpointId: active === null ? null : active.checkpointId,
+        signature: active === null ? null : active.signature,
+        diagnostics: active === null ? [] : active.diagnostics,
+    });
+
+    function realm(checkpoint, hidden = false) {
+        const frame = document.createElement('iframe');
+        frame.className = 'doxagon-checkpoint-realm';
+        if (hidden) {
+            frame.style.visibility = 'hidden';
+            frame.setAttribute('aria-hidden', 'true');
+            frame.tabIndex = -1;
+        }
+        frame.title = `Checkpoint ${checkpoint.label}`;
+        // No allow-same-origin: the realm is an opaque origin, so it cannot
+        // reach host DOM, cookies, storage, or another checkpoint.
+        frame.setAttribute('sandbox', 'allow-scripts');
+        frame.setAttribute('referrerpolicy', 'no-referrer');
+        if (isDocument(checkpoint)) frame.dataset.doxagonDocument = 'true';
+        frame.srcdoc = composeRealmDocument(checkpoint, { deckRevision: deck.revision, reducedMotion });
+
+        const waiting = new Map();
+        let port = null;
+        let ready = null;
+        const readyPromise = new Promise((resolve) => { ready = resolve; });
+        // The realm's broker offers its private port before any author byte
+        // runs, so the first port this frame sends is the broker's. A later
+        // window message from the same frame — a checkpoint trying to install
+        // itself as the responder — has nothing left to claim.
+        const listener = (event) => {
+            if (event.source !== frame.contentWindow) return;
+            const cued = event.data;
+            // Cue notices arrive on the realm's window channel, never the private
+            // port: they are observations, not answers to a host request.
+            if (port !== null && cued !== null && typeof cued === 'object' && cued.type === 'cue') {
+                onCue(checkpoint.id, String(cued.cue));
+                return;
+            }
+            if (port !== null && cued !== null && typeof cued === 'object' && cued.type === 'diagnostic') {
+                // Only the mounted realm may annotate the published state; a
+                // retiring frame cannot append to the state that replaced it.
+                if (active !== null && active.checkpointId === checkpoint.id) {
+                    active.diagnostics = [...active.diagnostics, String(cued.message)];
+                    onState(state());
+                }
+                return;
+            }
+            if (port !== null) return;
+            const message = event.data;
+            if (message === null || typeof message !== 'object' || message.type !== 'ready') return;
+            const offered = event.ports && event.ports[0];
+            if (!offered) return;
+            port = offered;
+            port.onmessage = (reply) => {
+                const payload = reply.data;
+                if (payload === null || typeof payload !== 'object') return;
+                const settle = waiting.get(payload.id);
+                if (settle === undefined) return;
+                waiting.delete(payload.id);
+                settle(payload);
+            };
+            // The window listener stays attached for cue notices, which are
+            // observations rather than answers; the private port remains the
+            // only channel that can settle a host request.
+            ready();
+        };
+        window.addEventListener('message', listener);
+        mount.appendChild(frame);
+
+        let counter = 0;
+        let closed = false;
+        const send = (type, payload = {}, { signal, timeout = EXIT_TIMEOUT_MS } = {}) => new Promise((resolve, reject) => {
+            if (closed || signal?.aborted) { reject(cancelled()); return; }
+            const id = (counter += 1);
+            const finish = (error, message) => {
+                waiting.delete(id);
+                window.clearTimeout(timer);
+                signal?.removeEventListener('abort', abort);
+                if (error) reject(error);
+                else resolve(message);
+            };
+            const abort = () => finish(cancelled());
+            // Readiness is part of the deadline too: a broken realm must not
+            // leave a request waiting forever before its timer starts.
+            const timer = window.setTimeout(() => finish(new RuntimeError(
+                type === 'transition' ? 'PRES_TRANSITION_TIMEOUT'
+                    : type === 'sample' ? 'PRES_SAMPLE_TIMEOUT'
+                        : 'PRES_CHECKPOINT_TIMEOUT',
+                `${type} did not settle for ${checkpoint.id}`,
+            )), timeout);
+            signal?.addEventListener('abort', abort, { once: true });
+            waiting.set(id, (message) => {
+                if (message.ok) finish(null, message);
+                else finish(new RuntimeError('PRES_CHECKPOINT_FAILED', message.error, { denied: message.denied }));
+            });
+            readyPromise.then(() => {
+                if (waiting.has(id) && !closed) port.postMessage({ id, type, ...payload });
+            });
+        });
+
+        return {
+            send,
+            label(checkpoint) { frame.title = `Checkpoint ${checkpoint.label}`; },
+            destroy() {
+                closed = true;
+                window.removeEventListener('message', listener);
+                for (const settle of Array.from(waiting.values())) {
+                    settle({ ok: false, error: 'PRES_REALM_CLOSED' });
+                }
+                if (port !== null) port.close();
+                frame.remove();
+            },
+        };
+    }
+
+    async function discard(created) {
+        try { await created.send('cancel', {}, { timeout: CANCEL_TIMEOUT_MS }); }
+        catch { /* a non-cooperating author loses the realm */ }
+        finally { created.destroy(); }
+    }
+
+    async function teardown(signal) {
+        if (active === null) return;
+        const current = active;
+        active = null;
+        let leaked = [];
+        try {
+            const result = await current.realm.send('exit', {}, { signal });
+            leaked = result.leaked || [];
+        } catch (error) {
+            await discard(current.realm);
+            throw error;
+        } finally {
+            current.realm.destroy();
+        }
+        if (leaked.length > 0) {
+            throw new RuntimeError(
+                'PRES_CHECKPOINT_LEAK',
+                `${current.checkpointId} left ${leaked.length} brokered handle(s) open at exit`,
+                { leaked },
+            );
+        }
+    }
+
+    function remember(checkpointId, signature) {
+        const previous = signatures.get(checkpointId);
+        if (previous !== undefined && previous !== signature) {
+            throw new RuntimeError(
+                'PRES_CHECKPOINT_NONDETERMINISTIC',
+                `${checkpointId} produced signature ${signature} after ${previous}`,
+                { checkpointId, expected: previous, actual: signature },
+            );
+        }
+        signatures.set(checkpointId, signature);
+    }
+
+    function publish() {
+        sequence += 1;
+        onState(state());
+        return state();
+    }
+
+    async function absoluteSeek(checkpointId, signal, diagnostics = []) {
+        const checkpoint = checkpoints.get(checkpointId);
+        if (checkpoint === undefined) {
+            throw new RuntimeError('PRES_CHECKPOINT_UNKNOWN', `${checkpointId} is not in revision ${deck.revision}`);
+        }
+        await teardown(signal);
+        if (signal.aborted) throw cancelled();
+        const created = realm(checkpoint);
+        try {
+            await created.send('create', {}, { signal });
+            await created.send('enter', {}, { signal });
+            const { signature } = await created.send('signature', {}, { signal });
+            remember(checkpointId, signature);
+            active = { checkpointId, signature, realm: created, diagnostics };
+        } catch (error) {
+            await discard(created);
+            throw error;
+        }
+        return publish();
+    }
+
+    async function destinationSignature(checkpoint, signal) {
+        if (signatures.has(checkpoint.id)) return;
+        // A transition must agree with reconstruction even on its first visit.
+        // Warm one hidden, equally sandboxed destination, then cache its proof.
+        const proof = realm(checkpoint, true);
+        try {
+            await proof.send('create', {}, { signal });
+            await proof.send('enter', {}, { signal });
+            const { signature } = await proof.send('signature', {}, { signal });
+            const { leaked } = await proof.send('exit', {}, { signal });
+            if (leaked.length) throw new RuntimeError('PRES_CHECKPOINT_LEAK', 'destination proof leaked handles', { leaked });
+            remember(checkpoint.id, signature);
+        } catch (error) {
+            await discard(proof);
+            throw error;
+        } finally { proof.destroy(); }
+    }
+
+    async function traverse(target, action, signal) {
+        const source = active && checkpoints.get(active.checkpointId);
+        const destination = checkpoints.get(target);
+        const edge = deck.edges.find((item) => action.type === 'NEXT'
+            ? item.from === source?.id && item.to === target
+            : item.to === source?.id && item.from === target);
+        if (!source?.scene || source.scene !== destination?.scene || !edge || reducedMotion) {
+            return absoluteSeek(target, signal);
+        }
+        const current = active;
+        try {
+            await destinationSignature(destination, signal);
+            const result = await current.realm.send('transition', { transition: {
+                from: source.id, to: target,
+                direction: action.type === 'NEXT' ? 'forward' : 'reverse',
+                edge,
+            } }, { signal, timeout: edge.timeout_ms ?? TRANSITION_TIMEOUT_MS });
+            if (!result.transitioned) return absoluteSeek(target, signal);
+            const { signature } = await current.realm.send('signature', {}, { signal });
+            remember(target, signature);
+            active = { ...current, checkpointId: target, signature, diagnostics: [] };
+            current.realm.label(destination);
+            return publish();
+        } catch (error) {
+            active = null;
+            await discard(current.realm);
+            if (signal.aborted) throw cancelled();
+            // The server already owns the destination. A failed visual path
+            // must not strand this client at a different cursor.
+            return absoluteSeek(target, signal, [`${error.code}: ${error.message}`]);
+        }
+    }
+
+    const serialize = (work) => {
+        const expected = generation;
+        const run = async () => {
+            if (expected !== generation || destroyed) return state();
+            const controller = new AbortController();
+            running = controller;
+            try { return await work(controller.signal); }
+            finally { if (running === controller) running = null; }
+        };
+        const next = pending.then(run, run);
+        pending = next.catch(() => {});
+        return next;
+    };
+
+    function cancel() {
+        generation += 1;
+        latestSample = null;
+        running?.abort();
+    }
+
+    // Samples are content, not navigation: they bypass serialize, never bump
+    // sequence, and never publish state. Latest value wins; older ones drop.
+    function sample(track, progress) {
+        if (destroyed || active === null) return Promise.resolve({ sampled: false });
+        latestSample = { track, progress };
+        if (sampling !== null) return sampling;
+        sampling = (async () => {
+            let result = { sampled: false };
+            while (latestSample !== null && !destroyed) {
+                const next = latestSample;
+                latestSample = null;
+                await pending; /* let any discrete transition finish first */
+                if (active === null) break;
+                result = await active.realm.send('sample', { track: next.track, progress: next.progress }, { timeout: EXIT_TIMEOUT_MS });
+            }
+            return result;
+        })().finally(() => { sampling = null; });
+        return sampling;
+    }
+
+    function viewport() {
+        return active === null ? Promise.resolve(null) : active.realm.send('viewport').then((m) => m.viewport);
+    }
+
+    function seek(checkpointId) {
+        if (!checkpoints.has(checkpointId)) {
+            return Promise.reject(new RuntimeError('PRES_CHECKPOINT_UNKNOWN', `${checkpointId} is not in this revision`));
+        }
+        cancel();
+        return serialize((signal) => absoluteSeek(checkpointId, signal));
+    }
+
+    return {
+        get deck() { return deck; },
+        state,
+        signatures: () => Object.fromEntries(Array.from(signatures.entries()).sort()),
+        seek,
+        cancel,
+        dispatch(action) {
+            if (['SEEK', 'HOME', 'END'].includes(action.type)) {
+                return seek(resolveAction(deck, deck.checkpoint_order[0], action));
+            }
+            return serialize((signal) => {
+                const from = active === null ? deck.checkpoint_order[0] : active.checkpointId;
+                const target = active === null && action.type !== 'SEEK'
+                    ? resolveAction(deck, from, action.type === 'PREVIOUS' ? { type: 'HOME' } : action)
+                    : resolveAction(deck, from, action);
+                if (target === null) return Promise.resolve(state());
+                return traverse(target, action, signal);
+            });
+        },
+        adopt(candidate) {
+            const held = snapshot;
+            const sessionId = held?.session_id ?? candidate.session_id;
+            if (!checkpoints.has(candidate.checkpoint_id)
+                || !acceptsSnapshot(held, candidate, deck.revision, sessionId)) {
+                return Promise.reject(new RuntimeError('PRES_SNAPSHOT_REJECTED', 'snapshot does not follow this session'));
+            }
+            if (held && candidate.epoch === held.epoch && candidate.sequence === held.sequence
+                && (running !== null || active?.checkpointId === candidate.checkpoint_id)) {
+                return pending.then(() => state());
+            }
+            snapshot = candidate;
+            const cue = candidate.cue ?? null;
+            // Same document, different cue: travel inside the realm rather than
+            // rebuilding it, so the audience scrolls where the presenter did.
+            if (cue !== null && active?.checkpointId === candidate.checkpoint_id) {
+                return active.realm.send('travel', { cue, smooth: !reducedMotion })
+                    .then(() => state(), () => state());
+            }
+            const navigation = candidate.navigation;
+            const contiguous = held && candidate.epoch === held.epoch && candidate.sequence === held.sequence + 1;
+            if (contiguous && running === null && navigation?.from === active?.checkpointId
+                && ['NEXT', 'PREVIOUS'].includes(navigation?.type)
+                && resolveAction(deck, navigation.from, navigation) === candidate.checkpoint_id) {
+                return serialize((signal) => traverse(candidate.checkpoint_id, navigation, signal));
+            }
+            return seek(candidate.checkpoint_id).then(async (published) => {
+                // A document entered by snapshot lands on the cue the server
+                // named, not merely at its top.
+                if (cue !== null && active !== null) {
+                    await active.realm.send('observe', { readingLine: 0.5 }).catch(() => {});
+                    await active.realm.send('travel', { cue, smooth: false }).catch(() => {});
+                }
+                return published;
+            });
+        },
+        inspect: () => (active === null ? Promise.resolve(null) : active.realm.send('inspect').then((m) => m.inspect)),
+        scroll: () => (active === null ? Promise.resolve(null) : active.realm.send('scroll').then((m) => m.scroll)),
+        sample,
+        viewport,
+        /* Document mode: the realm measures its own layout and reports the cue
+         * it selected. The host asks it to travel; it never reaches into the
+         * author's DOM to do so itself. */
+        observe: (readingLine) => (active === null
+            ? Promise.resolve(null)
+            : active.realm.send('observe', { readingLine }).then((message) => message)),
+        travel: (cue, { smooth = true } = {}) => (active === null
+            ? Promise.resolve({ travelled: false })
+            : active.realm.send('travel', { cue, smooth })),
+        destroy() {
+            cancel();
+            destroyed = true;
+            latestSample = null;
+            return pending.then(async () => {
+                const current = active;
+                active = null;
+                if (current) await discard(current.realm);
+            });
+        },
+    };
+}
+
+/** Keyboard and presenter controls over the same navigation executor. */
+export function attachControls(runtime, target = window) {
+    const keys = {
+        ArrowRight: { type: 'NEXT' }, PageDown: { type: 'NEXT' }, ' ': { type: 'NEXT' },
+        ArrowLeft: { type: 'PREVIOUS' }, PageUp: { type: 'PREVIOUS' },
+        Home: { type: 'HOME' }, End: { type: 'END' },
+    };
+    const listener = (event) => {
+        const action = keys[event.key];
+        if (action === undefined || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+        const node = event.target;
+        if (node && (node.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(node.tagName))) return;
+        event.preventDefault();
+        runtime.dispatch(action).catch(() => {});
+    };
+    target.addEventListener('keydown', listener);
+    return () => target.removeEventListener('keydown', listener);
+}

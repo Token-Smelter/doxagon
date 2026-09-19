@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./library:/app/library:ro
+      # Optional: mount src for development (hot reloading backend needs extra config though)
+      # - ./src:/app/src
+    environment:
+      - DOXAGON_ROOT=/app
