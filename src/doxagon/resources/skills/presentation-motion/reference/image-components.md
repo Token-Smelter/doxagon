@@ -95,6 +95,17 @@ Then select a real variant into each slot:
 
 Mount with `assets: {STYLE: {base: 'plate-base', core: 'plate-core', ...}}` ([mount](./../kit/motion.js:18)). The runtime stays not-ready until every mapped image is resident, and rebuilds textures when any `src` changes. Labels and verdicts stay in DOM text, never baked into a component.
 
+## Skins
+
+**A skin is a component whose role is a surface, not an object.** Use role `skin-tile` or `skin-wrap` in the case file; the request swaps the silhouette contract for a surface contract ([roles](./../scripts/asset_requests.py)). One generation per skin, approved like any other.
+
+| Role | Ask for | `aspect_ratio` |
+|---|---|---|
+| `skin-tile` | Seamless in both directions, one motif family, no focal point; light marks on pure black (or real alpha) so one image can be keyed and tinted to any palette | `1:1` |
+| `skin-wrap` | A panorama with the composition spread across the width, large simple shapes, a calm top edge that may be cropped; no text | The platform ratio closest to and wider than the wrapped span, usually `16:9`; the wrap crops the rest |
+
+Derive the motif from the subject, never from the samples. Review it as a surface: tile it 2 × 2 and look for seams and repeating blotches, and preview it on the part at the size it will be seen. Select it into an image slot and pass that slot's id as `skin.image` ([skins](./stage.md#skins)). The [sample skins](./../samples/stage/skins/README.md) record their prompts and processing.
+
 ## Free integration proof
 
 [The fixture provider](./../scripts/fixture_provider.py:1) writes a deterministic 1K transparent geometric image, chosen by prompt hash so N requests yield distinguishable images, and reports `motion-fixture-no-generation`. It proves the plumbing for N components, not prompt compliance or image quality. Use it only in a disposable synthetic vault. Its source is installed as data, so make a disposable executable copy to use it as a provider.

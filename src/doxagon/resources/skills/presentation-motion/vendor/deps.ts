@@ -1,15 +1,10 @@
-export {
-  Scene, PerspectiveCamera, OrthographicCamera, WebGLRenderer, Color, FogExp2,
-  Group, Object3D, Vector2, Vector3, Matrix4, Mesh, Sprite, SpriteMaterial,
-  MeshStandardMaterial, MeshBasicMaterial, ShaderMaterial, ShadowMaterial,
-  PlaneGeometry, BoxGeometry, CylinderGeometry, ConeGeometry, SphereGeometry,
-  TorusGeometry, CircleGeometry, ExtrudeGeometry, Shape, BufferGeometry,
-  Float32BufferAttribute, Points, PointsMaterial, Line, LineBasicMaterial,
-  Texture, CanvasTexture, DirectionalLight, AmbientLight, HemisphereLight,
-  DoubleSide, SRGBColorSpace, LinearSRGBColorSpace, PCFSoftShadowMap,
-  NoToneMapping, ACESFilmicToneMapping, AdditiveBlending, NormalBlending, ClampToEdgeWrapping,
-  RepeatWrapping, DefaultLoadingManager, MathUtils
-} from './three.module.js';
+// The whole Three namespace, so scenes never need workarounds for a missing export.
+export * from './three.module.js';
+export { RoomEnvironment } from './three-addons/environments/RoomEnvironment.js';
+export { RoundedBoxGeometry } from './three-addons/geometries/RoundedBoxGeometry.js';
+export { LineSegments2 } from './three-addons/lines/LineSegments2.js';
+export { LineSegmentsGeometry } from './three-addons/lines/LineSegmentsGeometry.js';
+export { LineMaterial } from './three-addons/lines/LineMaterial.js';
 export { createThreeAdapter } from './hyperframes/packages/core/src/runtime/adapters/three';
 export { forceDispatchSeekEvent, waitForSeekCompletion } from './hyperframes/packages/core/src/runtime/adapters/seek-dispatch';
 export { getFragSource } from './hyperframes/packages/shader-transitions/src/shaders/registry';

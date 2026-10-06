@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from doxagon.presentations.generation import ASPECT_RATIOS
 from doxagon.renderings.document_assets import key_name
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,19 @@ ROLES = {
         "Rotationally asymmetric, with one clear pointer, so each turn is visible. No baked motion blur."
     ),
     "emblem": "A closed emblem centered with generous margin, legible at 64 pixels.",
+    "skin-tile": (
+        "A seamless tile for a 3D surface: the left edge continues into the right and the top into the bottom. "
+        "Flat and orthographic, evenly lit, one motif family spread evenly with no focal point."
+    ),
+    "skin-wrap": (
+        "A panorama to be wrapped around a 3D object. Spread the composition evenly across the width with no single "
+        "centred subject; large, simple shapes that stay readable when small; a calm top edge that may be cropped."
+    ),
+}
+# Skins are surfaces, not isolated objects, so they replace the silhouette contract.
+SKIN_COMMON = {
+    "skin-tile": "Light marks on a pure black background, or real alpha, so the page can key and tint them. No text, border or vignette.",
+    "skin-wrap": "Opaque and edge to edge. No text, logos, border, frame or vignette.",
 }
 
 
@@ -35,13 +49,18 @@ def style_request(profile_name: str, key: str) -> dict:
 
 def component_request(component: dict, key: str, style_key: str, reference: str | None = None) -> dict:
     key_name(key)
+    # A wrap wants the wrapped span over its height ((width + depth) / height for a box); take the closest wider
+    # platform ratio and let the wrap crop its calm top edge.
+    aspect = component.get("aspect_ratio", "1:1")
+    if aspect not in ASPECT_RATIOS:
+        raise ValueError(f"aspect_ratio must be one of {', '.join(sorted(ASPECT_RATIOS))}, not {aspect!r}")
     sources = ""
     if reference and component["role"] == "layer":
         sources = "sources: [{file: whole.png, role: registration and silhouette of the assembled object}]\n"
     definition = (
         f"---\ndialect: brief/1\nintent: Animation component ({component['role']})\nstyles: [{style_key}]\n{sources}"
-        "config:\n  resolution: 1K\n  aspect_ratio: '1:1'\n---\n"
-        f"{component['description']}\n{ROLES[component['role']]}\n{COMMON}\n"
+        f"config:\n  resolution: 1K\n  aspect_ratio: '{aspect}'\n---\n"
+        f"{component['description']}\n{ROLES[component['role']]}\n{SKIN_COMMON.get(component['role'], COMMON)}\n"
     )
     request = {"operation": "create", "key": key, "dialect": "brief/1", "definition": definition}
     if sources:

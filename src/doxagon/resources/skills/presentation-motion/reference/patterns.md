@@ -49,6 +49,7 @@ A second, simpler loop form is a nested child with **finite** repeats ([idle bre
 | Tracking bracket | `ai-tracking-box` | [corners](./../kit/renderers.js:60) | All; bounds projected by each renderer ([projection](./../kit/renderers.js:508)) | Recomputed from the target every frame |
 | Dynamic-scale counter, anchored expansion | `counting-dynamic-scale`, `anchored-layout-expand` | [counter and sheet](./../kit/renderers.js:51) | Shared DOM ledger | Transform-only; no width or height tweens |
 | Ambient glow bloom | `ambient-glow-bloom` | seal bloom in the state | All | Peak opacity below 0.45, breathes with the nested idle loop |
+| Drawing to solid | — | [machine sample](./../samples/stage/machine.js) | Stage scenes (`drawing: true`) | `solid` from time blends each lit surface from paper to itself ([blend](./../kit/stage/kit.js)); paper ink fades with it |
 
 ## Geometry-first mathematical patterns
 

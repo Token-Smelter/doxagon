@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Observatory — synthetic document</title>
+<style>
+body{margin:0;background:#102e39;color:#f6fafb;font:22px/1.5 Georgia,serif}main{position:fixed;inset:0;display:grid;place-content:center;text-align:center;padding:2rem}h1{font-size:clamp(28px,5vw,60px);margin:0}p{max-width:50ch}svg{height:130px;width:100%;overflow:visible}#orbit{transform-origin:center}nav{display:flex;justify-content:center;gap:1rem}button{min-height:44px;background:#23576a;color:white;border:1px solid #98c0d0;padding:.5rem 1rem;font:16px system-ui}#track{height:500vh}#reading{position:relative;top:420vh;padding:2rem}a{color:inherit}
+</style></head>
+<body><div id="track"></div><main><h1>The observatory</h1><p id="caption">A synthetic, public-domain animation fixture.</p><svg viewBox="0 0 400 130" aria-label="A moving orbit"><g id="orbit"><ellipse cx="200" cy="65" rx="120" ry="36" fill="none" stroke="#98c0d0"/><circle cx="80" cy="65" r="12" fill="#ffcc66"/></g></svg><nav><button id="back">Previous in document</button><button id="next">Next in document</button></nav></main>
+<script>
+(() => {
+    const documentId = 'synthetic-observatory';
+    const edition = 'public-1';
+    const cues = ['Dawn', 'Measure', 'Compare', 'Reflect', 'Night'].map((title, index) => ({ id: `cue-${index}`, title }));
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+    let port = null;
+    let travel = null;
+    const commands = [];
+    const instance = crypto.randomUUID();
+    function state() {
+        const position = Math.max(0, Math.min(4, scrollY / innerHeight));
+        const index = Math.min(4, Math.floor(position + .0001));
+        return { type: 'position', documentId, edition, cue: cues[index].id, index, total: cues.length, progress: index === 4 ? 1 : Math.max(0, position - index), chapter: 'sky' };
+    }
+    function draw() {
+        const current = state();
+        document.getElementById('caption').textContent = cues[current.index].title;
+        document.getElementById('orbit').style.transform = `rotate(${reduced.matches ? current.index * 35 : scrollY / innerHeight * 35}deg)`;
+        port?.postMessage(current);
+    }
+    function cancel() { if (travel) cancelAnimationFrame(travel.frame); travel = null; }
+    function go(cue, instant = false) {
+        const index = cues.findIndex(item => item.id === cue);
+        if (index < 0) return;
+        const from = scrollY;
+        const adjacent = Math.abs(index - state().index) <= 1;
+        cancel();
+        if (instant || reduced.matches || !adjacent) { scrollTo(0, index * innerHeight); draw(); return; }
+        const animation = { started: performance.now(), index, frame: 0 };
+        travel = animation;
+        const tick = now => {
+            if (travel !== animation) return;
+            const t = Math.min(1, (now - animation.started) / 850);
+            scrollTo(0, from + (index * innerHeight - from) * (t * t * (3 - 2 * t)));
+            draw();
+            if (t < 1) animation.frame = requestAnimationFrame(tick);
+            else travel = null;
+        };
+        animation.frame = requestAnimationFrame(tick);
+    }
+    function move(direction) { go(cues[Math.max(0, Math.min(4, (travel?.index ?? state().index) + direction))].id); }
+    addEventListener('scroll', draw);
+    for (const type of ['wheel', 'touchstart', 'pointerdown']) addEventListener(type, cancel, { passive: true });
+    addEventListener('keydown', event => {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.('button,input,select,textarea,a')) return;
+        if (event.key === 'ArrowRight') { event.preventDefault(); move(1); }
+        if (event.key === 'ArrowLeft') { event.preventDefault(); move(-1); }
+    });
+    document.getElementById('next').onclick = () => move(1);
+    document.getElementById('back').onclick = () => move(-1);
+    addEventListener('message', event => {
+        if (parent === window || event.source !== parent || event.data?.type !== 'doxagon:connect' || !event.ports[0]) return;
+        port?.close();
+        port = event.ports[0];
+        port.onmessage = ({ data }) => {
+            commands.push(data);
+            if (data?.type === 'next') move(1);
+            else if (data?.type === 'previous') move(-1);
+            else if (data?.type === 'go') go(data.cue, data.instant === true);
+            else if (data?.type === 'state') draw();
+        };
+        port.start();
+        port.postMessage({ type: 'ready', documentId, edition, cues });
+        draw();
+    });
+    window.observatory = { instance, state, commands, send: data => port.postMessage(data), oldPort: () => port };
+    draw();
+})();
+</script></body></html>
