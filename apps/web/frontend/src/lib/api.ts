@@ -39,9 +39,21 @@ export interface DiegesisSection {
     doxai: string[];
 }
 
+/**
+ * Which rendering model a thesis's presentation plays through.
+ *
+ * `document` is one authored HTML file driven through the MessagePort bridge;
+ * `slides` is the legacy per-slide tree. They are different products, so a
+ * caller reads this rather than inferring a model from `slide_count`, which a
+ * document does not have.
+ */
+export type PresentationModel = 'document' | 'slides' | 'none';
+
 export interface ThesisRef {
     slug: string;
     walk: string;
+    has_presentation: boolean;
+    presentation_model: PresentationModel;
 }
 
 export interface DiegesisListItem {
@@ -438,9 +450,11 @@ export interface ThesisListItem {
     name: string;
     diegesis: string;
     walk: string;
+    /** The legacy slide tree only; a document model always reports zero. */
     slide_count: number;
     slides_with_images: number;
     has_presentation: boolean;
+    presentation_model: PresentationModel;
     has_essay: boolean;
 }
 

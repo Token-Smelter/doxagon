@@ -235,7 +235,7 @@ def skills_sync(vault: Path | None, force: bool, as_json: bool) -> None:
     elif not report['changed'] and not report['foreign'] and not report['vault_only']:
         click.echo('No changes.')
     else:
-        for key in ('created', 'updated', 'foreign', 'vault_only'):
+        for key in ('created', 'updated', 'removed', 'foreign', 'vault_only'):
             if report[key]:
                 click.echo(f"{key}: {', '.join(report[key])}")
 

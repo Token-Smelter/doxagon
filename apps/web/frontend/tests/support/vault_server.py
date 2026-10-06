@@ -77,6 +77,43 @@ def write_claim_doxai(root: Path) -> None:
         (doxai / f"{slug}.md").write_text(body, encoding="utf-8")
 
 
+#: The diegesis the `outline` project declares instead of `synthetic`.
+#:
+#: The `n-` prefix is the library's own convention and the only shape
+#: `list_diegeses` enumerates, so this is the scope whose *title* a caller can
+#: resolve. `synthetic` stays off-convention on purpose: together the two prove
+#: a rail groups by the declared slug either way, naming the scope when the
+#: library lists it and falling back to the slug when it does not.
+SECOND_DIEGESIS = "n-cartography"
+
+
+def write_synthetic_diegesis(root: Path) -> None:
+    """The diegeses the synthetic projects declare in their `config.yaml`.
+
+    With them, the real diegeses and theses routers answer the graph's diegesis
+    panel, so a proof of its Linked Theses cards reads both rendering models
+    from the producers rather than from a fixture the test invented.
+    """
+
+    diegeses = root / "library" / "diegeses"
+    diegeses.mkdir(parents=True, exist_ok=True)
+    (diegeses / "synthetic.md").write_text(
+        "---\n"
+        "title: Synthetic diegesis\n"
+        "sections:\n"
+        "  opening:\n"
+        "    title: Opening\n"
+        "    doxai:\n"
+        + "".join(f"      - {slug}\n" for slug in CLAIM_DOXAI)
+        + "walks:\n  canonical:\n    - opening\n---\n\nThe scope these synthetic projects argue within.\n",
+        encoding="utf-8",
+    )
+    (diegeses / f"{SECOND_DIEGESIS}.md").write_text(
+        "---\ntitle: Cartography\nsections: {}\nwalks:\n  canonical: []\n---\n\nA second scope, so a vault holds more than one.\n",
+        encoding="utf-8",
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, help="an empty directory this server owns")
@@ -103,6 +140,7 @@ def main() -> None:
     )
 
     write_claim_doxai(root)
+    write_synthetic_diegesis(root)
     (root / 'projects').mkdir(exist_ok=True)
     (root / 'theses').symlink_to('projects')
     vault = write_vault(root)
@@ -117,8 +155,9 @@ def main() -> None:
     write_numbered_presentation(vault)
     # A second copy of the same legacy shape, reserved for the one test that
     # reorders a deck. Reordering the shared `stock` tree would decide what a
-    # later test in the same worker reads.
-    write_stock_presentation(vault, "outline")
+    # later test in the same worker reads. It declares the second diegesis, so
+    # the vault this server serves spans more than one scope.
+    write_stock_presentation(vault, "outline", SECOND_DIEGESIS)
 
     from doxagon.presentations.vault import open_or_migrate
 

@@ -85,6 +85,25 @@
         }
     }
 
+    /**
+     * Whether `/presentations?thesis=` can actually open this thesis.
+     *
+     * That route resolves an authored selection before any checkpoint
+     * workspace (`PresentationView` -> `findAuthoredDocument`), so it serves
+     * both models; a document needs no slide count and a legacy project still
+     * needs a slide to show. Gating a document on `slide_count` suppressed the
+     * only link to it, because a document has no slides to count.
+     */
+    function canOpenPresentation(thesisItem: ThesisListItem): boolean {
+        if (thesisItem.presentation_model === 'document') return true;
+        return thesisItem.presentation_model === 'slides' && thesisItem.slide_count > 0;
+    }
+
+    function thesisIcon(model: ThesisListItem['presentation_model']): string {
+        if (model === 'document') return '📄';
+        return model === 'slides' ? '📊' : '📝';
+    }
+
     function selectNode(slug: string) {
         selectedNode.set(slug);
         focusRequest.set(slug);
@@ -226,19 +245,21 @@
                     {#each thesisList as thesisItem}
                         <div class="thesis-card">
                             <div class="thesis-header">
-                                <span class="thesis-icon">{thesisItem.has_presentation ? '📊' : '📝'}</span>
+                                <span class="thesis-icon">{thesisIcon(thesisItem.presentation_model)}</span>
                                 <span class="thesis-name">{thesisItem.name}</span>
                             </div>
                             <div class="thesis-meta">
                                 <span class="thesis-walk">walk: {thesisItem.walk}</span>
-                                {#if thesisItem.slide_count > 0}
+                                {#if thesisItem.presentation_model === 'document'}
+                                    <span class="thesis-slides">document</span>
+                                {:else if thesisItem.slide_count > 0}
                                     <span class="thesis-slides">{thesisItem.slide_count} slides</span>
                                     <span class="thesis-images">
                                         {thesisItem.slides_with_images}/{thesisItem.slide_count} with images
                                     </span>
                                 {/if}
                             </div>
-                            {#if thesisItem.has_presentation && thesisItem.slide_count > 0}
+                            {#if canOpenPresentation(thesisItem)}
                                 <a
                                     class="view-btn"
                                     href={`/presentations?thesis=${encodeURIComponent(thesisItem.slug)}&return=${encodeURIComponent(`/?diegesis=${$activeDiegesis}${$activeWalk ? `&walk=${$activeWalk}` : ''}`)}`}

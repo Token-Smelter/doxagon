@@ -1,0 +1,50 @@
+{
+  "press": {
+    "name": "Printed field guide",
+    "background": "#f5ecdb", "surface": "#fff9ec", "ink": "#29241f",
+    "accent": "#785534", "reject": "#a33022", "accept": "#326246",
+    "font": "MotionSerif", "stroke": 2, "linecap": "butt", "pattern": "hatch",
+    "roughness": 0.92, "metalness": 0, "lift": 0.12,
+    "image_direction": "Printed technical specimen on warm stock. Fine dry dark contours and sparse crosshatching; restrained earthy pigment. Not a nautical scene. Preserve the silhouette, pivot and margins specified by the component definition."
+  },
+  "signal": {
+    "name": "Night instrument",
+    "background": "#0c2531", "surface": "#173b49", "ink": "#e3f4ef",
+    "accent": "#79ceca", "reject": "#ff9b76", "accept": "#a8e39c",
+    "font": "MotionMono", "stroke": 2.5, "linecap": "square", "pattern": "grid",
+    "roughness": 0.4, "metalness": 0.35, "lift": 0.05,
+    "image_direction": "Precisely machined specimen for an instrument display in low ambient light. Pale ceramic and brushed metal, restrained cool reflected light; no neon glow, text or ornamental HUD. Preserve the silhouette, pivot and margins specified by the component definition."
+  },
+  "porcelain": {
+    "name": "Glazed porcelain",
+    "background": "#e7edef", "surface": "#fcfdfd", "ink": "#263e5b",
+    "accent": "#315d8d", "reject": "#a23238", "accept": "#256247",
+    "font": "MotionSerif", "stroke": 1.6, "linecap": "round", "pattern": "arcs",
+    "roughness": 0.16, "metalness": 0.08, "lift": 0.08,
+    "image_direction": "Glazed white porcelain specimen with cobalt brush arcs. Thin flowing contours, generous unmarked white faces, small directional glaze highlights; no all-over ornament. Ceramic rather than chrome. Preserve the silhouette, pivot and margins specified by the component definition; highlights must not erase the contour."
+  },
+  "stencil": {
+    "name": "Punched industrial stencil",
+    "background": "#f1cf72", "surface": "#fff0b7", "ink": "#30291b",
+    "accent": "#62421e", "reject": "#8e2922", "accept": "#294e30",
+    "font": "MotionMono", "stroke": 3.2, "linecap": "square", "pattern": "perforation",
+    "roughness": 0.84, "metalness": 0.18, "lift": 0.02,
+    "image_direction": "Industrial stencil specimen: ochre powder-coated steel, squared heavy edges and ordered punched slots, sparse utilitarian marks, no text or hazard symbols. Flat broad faces with muted metallic edges, not distressed vintage paper. Preserve the silhouette, pivot and margins specified by the component definition; slots are face marks, never changes to the registered outline."
+  },
+  "textile": {
+    "name": "Woven exhibition model",
+    "background": "#352638", "surface": "#513b52", "ink": "#f7e7ef",
+    "accent": "#e4aacc", "reject": "#ffb39a", "accept": "#bddda8",
+    "font": "MotionSans", "stroke": 3.6, "linecap": "round", "pattern": "weave",
+    "roughness": 0.99, "metalness": 0, "lift": 0.18,
+    "image_direction": "Soft upholstered exhibition specimen against a dark plum setting. Felt faces, restrained woven thread marks, broad pale stitched contours and dusty rose panels. Diffuse light with no hard specular reflection; no loose fibers outside the silhouette. Preserve the silhouette, pivot and margins specified by the component definition; weave must remain subordinate to legible part boundaries."
+  },
+  "studio": {
+    "name": "Color-block workshop",
+    "background": "#eef3f4", "surface": "#ffffff", "ink": "#192c44",
+    "accent": "#266094", "reject": "#a23544", "accept": "#216f55",
+    "font": "MotionSans", "stroke": 4, "linecap": "round", "pattern": "solid",
+    "roughness": 0.72, "metalness": 0, "lift": 0.24,
+    "image_direction": "Tactile classroom model: crisp cut shapes, matte enamel, clear color blocks, broad contours, generous negative space. No distressed texture or engraved marks. Preserve the silhouette, pivot and margins specified by the component definition."
+  }
+}

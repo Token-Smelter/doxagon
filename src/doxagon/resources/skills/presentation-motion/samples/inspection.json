@@ -1,0 +1,17 @@
+{
+  "title": "One candidate. Several checks.",
+  "motif": "module",
+  "cues": ["motion-goal", "motion-candidate", "motion-inspect", "motion-revise", "motion-accept"],
+  "holds": [0, 8, 18, 29, 40],
+  "labels": ["Define the candidate", "Move it to review", "Independent readings disagree", "Revise without claiming approval", "Recheck, then release"],
+  "checks": ["Structure", "Compatibility", "Completeness"],
+  "components": [
+    {"key": "base", "role": "layer", "description": "The foundation layer of a three-part inspection module."},
+    {"key": "core", "role": "layer", "description": "The middle working layer of the module, the part that is revised."},
+    {"key": "cap", "role": "layer", "description": "The top cover layer of the module."},
+    {"key": "probe", "role": "actor", "description": "A small hovering inspection probe."},
+    {"key": "scanner", "role": "loop", "description": "A scanner disc with one pointer arm and evenly spaced rim marks."},
+    {"key": "seal", "role": "emblem", "description": "A seal awarded only after recheck."}
+  ],
+  "caption": "Synthetic inspection fixture. Components are drawn in code, not generated artwork."
+}

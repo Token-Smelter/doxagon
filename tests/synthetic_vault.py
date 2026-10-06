@@ -40,12 +40,12 @@ STOCK_CHOREOGRAPHY_DOCUMENT = (
 )
 
 
-def _thesis_config(presentation_dir: Path, title: str) -> None:
+def _thesis_config(presentation_dir: Path, title: str, diegesis: str = "synthetic") -> None:
     """The project record `list_theses` reads to put a thesis in the rail."""
 
     presentation_dir.mkdir(parents=True, exist_ok=True)
     presentation_dir.joinpath("config.yaml").write_text(
-        "\n".join([f"name: {title}", f"title: {title}", "diegesis: synthetic", "walk: canonical", ""]),
+        "\n".join([f"name: {title}", f"title: {title}", f"diegesis: {diegesis}", "walk: canonical", ""]),
         encoding="utf-8",
     )
 
@@ -109,11 +109,11 @@ def write_legacy_presentation(vault_root: Path, slug: str = "alpha") -> Path:
     return presentation_dir
 
 
-def write_stock_presentation(vault_root: Path, slug: str = "stock") -> Path:
+def write_stock_presentation(vault_root: Path, slug: str = "stock", diegesis: str = "synthetic") -> Path:
     """A public legacy HTML deck from the tracked stock choreography producer."""
 
     presentation_dir = vault_root / slug
-    _thesis_config(presentation_dir, f"{slug.title()} presentation")
+    _thesis_config(presentation_dir, f"{slug.title()} presentation", diegesis)
     outputs_root = presentation_dir / "outputs" / "presentation"
     outputs_root.mkdir(parents=True, exist_ok=True)
     outputs_root.joinpath("config.yaml").write_text(

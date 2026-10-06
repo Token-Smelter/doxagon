@@ -20,7 +20,7 @@ It is read-only and exits 0 only when every check passes.
 |---|---|---|
 | `entry_point` | which `dox` ran, its resolved target, the platform commit, and whether the platform tree is clean | the command you invoke is not the platform you think it is |
 | `vault_binding` | `DOXAGON_ROOT`, the resolved vault, and whether `knowledge/` and `projects/` exist | no vault is bound, or the bound path is not a vault |
-| `skills` | per-skill freshness: `missing`, `current`, `stale`, `foreign` | the skills you are about to follow are absent or not the platform's |
+| `skills` | per-skill freshness, including nested files: `missing`, `current`, `stale`, `foreign` | the skills you are about to follow are absent or not the platform's |
 | `agents_md` | this file's freshness in the same four-word vocabulary | your orientation text is absent or not the platform's |
 | `provider` | the configured image provider's name, resolved path and `executable_sha256` | image generation cannot run, or runs an unidentified binary |
 | `path_shims` | every other `dox` found on `PATH` | a stale shim can shadow the platform entry point |
@@ -33,7 +33,10 @@ not carry a failed check forward into a task.
 file on disk is not the bytes the platform wrote: read it, decide whether the
 local change still matters, and only then re-run with `--force`, which replaces
 it. Sync never touches `AGENTS.local.md`, and never removes skills this vault
-authored itself.
+authored itself. It installs nested recipe, sample, script and dependency files;
+retired platform files are removed only if unchanged. Edited retired files stay
+`foreign`, including with `--force`. Python helpers are invoked with Python;
+resource sync manages bytes, not executable permissions.
 
 ## 1. Orient on a project before touching it
 
@@ -122,6 +125,11 @@ changes nothing, `apply` promotes it only if the recorded inputs still match.
 images; a generation run is a bounded, potentially paid external effect, so the
 prompt is read before it is spent. Invoke the `presentation-document` skill for
 this path, and `visual-definition` or `visual-concept-brainstorm` for imagery.
+For cue-driven animation plates, use `presentation-motion`: its three recipes
+separate rendering technique from visual style and keep this document as the
+navigation owner. Animations can consume N generated image components (layers,
+actors, looping parts, emblems), each registered and selected like any image. Its samples are synthetic machinery demonstrations, not a
+presentation template or a default aesthetic.
 
 ## 6. Standing rules
 

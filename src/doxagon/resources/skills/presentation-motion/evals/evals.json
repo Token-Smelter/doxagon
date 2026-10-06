@@ -1,0 +1,36 @@
+{
+  "skill_name": "presentation-motion",
+  "status": "proposed; no model comparison has been run",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "We have a Doxagon document explaining how three sensors disagree before an operator resolves the reading. Animate the plate in the existing white-and-red clinical visual language. Keep the cues and notes. No boats, antique paper or invented approval claims. Use generated components only if they explain something the diagram cannot.",
+      "expected_output": "A cue/hold contract and appropriate motion recipe transferred into the clinical visual system, without copying sample scenery; paid work remains separately approved.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Use the same seekable scene to compare an editorial collage and a dark instrument-panel treatment. I want the argument and timing identical, but not merely a palette swap. Show which changes are semantic and which are visual. Package it into our existing Doxagon document rather than adding a player.",
+      "expected_output": "Style-independent timing/semantic state, variations in materials and type/mark-making, one navigation owner, actual host verification.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "The image provider returned an opaque PNG for our moving specimen. Wire it into Doxagon's miniature and SVG fallback without weakening the sandbox. We have not approved another generation call. Do not claim the image is already transparent.",
+      "expected_output": "Inspect actual alpha, preserve original provenance, identify the unresolved matte requirement; do not silently regenerate or flatten opaque imagery into a successful sprite claim.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "In our Doxagon chapter about a build pipeline, add a looping component (a turning gear or a sweeping reader) that keeps running while the stages advance, then becomes part of the finished artifact at the last cue. It must still land exactly on each cue when I jump backward.",
+      "expected_output": "A loop authored once and driven by an eased cycle counter on the master timeline; finite and seekable; attachment recomputed from the parent; lock at the final hold; probe contracts for periodicity and attachment.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "I want custom illustrations for the moving parts of this animated plate: the three layers of the device, a repeated sensor, and an emblem at the end. Use Doxagon's image generation, but don't spend anything until I've seen the prompts.",
+      "expected_output": "One asset per component under one shared project style, role contracts in definitions, a registration reference for layers, N reviewed generation plans with a stated count before any run, alpha and overlay review, selection into stable slots.",
+      "files": []
+    }
+  ]
+}

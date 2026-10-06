@@ -64,14 +64,41 @@ class AgentResource(NamedTuple):
     content: bytes
 
 
+def _skill_files(directory, prefix=""):
+    for item in sorted(directory.iterdir(), key=lambda entry: entry.name):
+        if item.name.startswith('.') or item.name == '__pycache__' or item.name.endswith(('.pyc', '.pyo')):
+            continue
+        if getattr(item, 'is_symlink', lambda: False)():
+            raise ValueError(f"Packaged skills cannot contain symlinks: {item}")
+        relative = f"{prefix}{item.name}"
+        if item.is_dir():
+            yield from _skill_files(item, f"{relative}/")
+        elif item.is_file():
+            yield relative, item.read_bytes()
+
+
 def packaged_resources() -> dict[str, AgentResource]:
-    """Name every platform-owned vault file and where it is materialized."""
-    resources = {
-        name: AgentResource(f"{SKILLS_DIRECTORY}/{name}/SKILL.md", content)
-        for name, content in packaged_skills().items()
-    }
+    """Name every platform-owned file; retain legacy keys for SKILL.md."""
+    resources = {}
+    for name in sorted(packaged_skills()):
+        for relative, content in _skill_files(SKILL_ROOT.joinpath(name)):
+            key = name if relative == 'SKILL.md' else f"{name}/{relative}"
+            resources[key] = AgentResource(f"{SKILLS_DIRECTORY}/{name}/{relative}", content)
     resources[AGENTS_RESOURCE] = AgentResource(AGENTS_RESOURCE, packaged_agents_md())
     return resources
+
+
+def _destination(name: str) -> str | None:
+    if name == AGENTS_RESOURCE:
+        return name
+    parts = name.split('/')
+    if any(not part or part.startswith('.') or '\\' in part or ':' in part for part in parts):
+        return None
+    return f"{SKILLS_DIRECTORY}/{name}" + ('/SKILL.md' if len(parts) == 1 else '')
+
+
+def _symlinked(vault: Path, target: Path) -> bool:
+    return any(path.is_symlink() for path in (target, *target.parents) if path != vault and vault in path.parents)
 
 
 def _manifest(path: Path) -> dict:
@@ -97,16 +124,28 @@ def _recorded(manifest: dict) -> dict[str, dict]:
 
 
 def resource_status(vault: Path) -> dict[str, dict[str, str]]:
-    manifest = _manifest(vault / MANIFEST_PATH)
+    vault = vault.expanduser().resolve()
+    manifest = {} if _symlinked(vault, vault / MANIFEST_PATH) else _manifest(vault / MANIFEST_PATH)
     recorded = _recorded(manifest)
     current_platform = manifest.get("platform_sha") == platform_sha()
     result: dict[str, dict[str, str]] = {}
-    for name, resource in packaged_resources().items():
+    resources = packaged_resources()
+    active = set(resources)
+    for name, record in recorded.items():
+        destination = _destination(name)
+        if name not in resources and destination and (vault / destination).exists():
+            resources[name] = AgentResource(destination, b'')
+    for name, resource in resources.items():
         target = vault / resource.destination
         expected = sha256(resource.content).hexdigest()
         prior = recorded.get(name, {}).get("sha256")
-        disk = sha256(target.read_bytes()).hexdigest() if target.is_file() else None
-        if disk is None:
+        unsafe = _symlinked(vault, target) or (target.exists() and not target.is_file())
+        disk = sha256(target.read_bytes()).hexdigest() if not unsafe and target.is_file() else None
+        if unsafe:
+            state = "foreign"
+        elif name not in active:
+            state = 'stale' if disk == prior else 'foreign'
+        elif disk is None:
             state = "missing"
         elif disk != (prior or expected):
             state = "foreign"
@@ -118,13 +157,27 @@ def resource_status(vault: Path) -> dict[str, dict[str, str]]:
     return result
 
 
-def skill_status(vault: Path) -> dict[str, dict[str, str]]:
-    return {name: record for name, record in resource_status(vault).items() if name != AGENTS_RESOURCE}
+def skill_status(vault: Path) -> dict[str, dict]:
+    result = {}
+    priority = {'current': 0, 'stale': 1, 'missing': 2, 'foreign': 3}
+    for key, record in resource_status(vault).items():
+        if key == AGENTS_RESOURCE:
+            continue
+        name = key.split('/')[0]
+        group = result.setdefault(name, {'status': 'current', 'files': {}})
+        group['files'][key] = record
+        if key == name:
+            group['sha256'] = record['sha256']
+        if priority[record['status']] > priority[group['status']]:
+            group['status'] = record['status']
+    return result
 
 
 def sync_agent_resources(vault: Path, force: bool = False) -> dict:
     vault = vault.expanduser().resolve()
     manifest_path = vault / MANIFEST_PATH
+    if _symlinked(vault, manifest_path):
+        raise ValueError('Refusing to sync agent resources through a symlinked manifest path')
     manifest = _manifest(manifest_path)
     prior = _recorded(manifest)
     manifest_stale = (manifest.get("platform_sha") != platform_sha()
@@ -134,8 +187,15 @@ def sync_agent_resources(vault: Path, force: bool = False) -> dict:
     current: list[str] = []
     foreign: list[str] = []
     resources = packaged_resources()
+    managed = {}
+    removed = []
     for name, resource in resources.items():
         destination = vault / resource.destination
+        if _symlinked(vault, destination) or (destination.exists() and not destination.is_file()):
+            foreign.append(name)
+            if name in prior:
+                managed[name] = prior[name]
+            continue
         old = prior.get(name, {}).get("sha256")
         existed = destination.exists()
         disk_digest = sha256(destination.read_bytes()).hexdigest() if destination.is_file() else None
@@ -143,15 +203,34 @@ def sync_agent_resources(vault: Path, force: bool = False) -> dict:
         local_edit = existed and disk_digest != (old or content_digest)
         if local_edit and not force:
             foreign.append(name)
+            if name in prior:
+                managed[name] = prior[name]
             continue
+        managed[name] = {'sha256': content_digest}
         if disk_digest == content_digest:
             current.append(name)
             continue
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(resource.content)
         (updated if existed else created).append(name)
-    managed = {name: {"sha256": sha256(resource.content).hexdigest()} for name, resource in resources.items()}
-    changed = bool(created or updated or not manifest_path.exists() or manifest_stale or force)
+    for name, record in prior.items():
+        if name in resources:
+            continue
+        relative = _destination(name)
+        if relative is None or relative in {resource.destination for resource in resources.values()}:
+            continue
+        destination = vault / relative
+        if _symlinked(vault, destination) or (destination.exists() and not destination.is_file()):
+            foreign.append(name)
+            managed[name] = record
+        elif destination.is_file():
+            if sha256(destination.read_bytes()).hexdigest() == record.get('sha256'):
+                destination.unlink()
+                removed.append(name)
+            else:
+                foreign.append(name)
+                managed[name] = record
+    changed = bool(created or updated or removed or managed != prior or not manifest_path.exists() or manifest_stale or force)
     if changed:
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(json.dumps({"schema": AGENT_RESOURCES_MANIFEST_SCHEMA, "platform_sha": platform_sha(),
@@ -159,7 +238,7 @@ def sync_agent_resources(vault: Path, force: bool = False) -> dict:
     skills_root = vault / SKILLS_DIRECTORY
     vault_only = sorted(path.name for path in skills_root.iterdir() if path.is_dir() and path.name not in packaged_skills()) if skills_root.exists() else []
     return {"vault": str(vault), "created": created, "updated": updated, "current": current,
-            "foreign": foreign, "vault_only": vault_only, "changed": changed}
+            "removed": removed, "foreign": foreign, "vault_only": vault_only, "changed": changed}
 
 
 def _capability_result(executable: Path) -> tuple[dict | None, str | None]:
@@ -274,7 +353,7 @@ def doctor(environ: Mapping[str, str] | None = None) -> dict:
                    "knowledge": bool(vault and (vault / "knowledge").is_dir()), "projects": bool(vault and (vault / "projects").is_dir())}
     vault_check["ok"] = bool(vault_check["knowledge"] and vault_check["projects"])
     resources = resource_status(vault) if vault_check["ok"] else {}
-    skills = {name: record for name, record in resources.items() if name != AGENTS_RESOURCE}
+    skills = skill_status(vault) if vault_check["ok"] else {}
     agents_md = dict(resources.get(AGENTS_RESOURCE, {"status": "unavailable"}))
     agents_md["ok"] = agents_md["status"] == "current"
     provider = __import__("doxagon.renderings.document_generation", fromlist=["provider_capabilities"]).provider_capabilities(env)

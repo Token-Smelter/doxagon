@@ -9,6 +9,13 @@ EvidenceType = Literal["empirical", "theoretical", "anecdotal", "expert-opinion"
 EvidenceStrength = Literal["strong", "moderate", "weak"]
 EdgeType = Literal["supports", "contradicts", "requires", "elaborates", "grounds", "causes", "resolves"]
 EdgeConfidence = Literal["high", "medium", "low"]
+# Which rendering model a thesis's presentation uses. The two are genuinely
+# different products, not two encodings of one: "document" is a single authored
+# HTML file selected by outputs/document/presentation.json and driven through
+# the MessagePort bridge, while "slides" is the per-slide legacy tree under
+# outputs/presentation/slides/. A caller reads this instead of guessing from
+# slide_count, which is meaningless for a document.
+PresentationModel = Literal["document", "slides", "none"]
 
 class EvidenceRef(BaseModel):
     source: str
@@ -78,6 +85,7 @@ class ThesisRef(BaseModel):
     slug: str
     walk: str
     has_presentation: bool = False
+    presentation_model: PresentationModel = "none"
 
 
 class DiegesisDetail(BaseModel):
@@ -316,9 +324,10 @@ class ThesisListItem(BaseModel):
     name: str                    # e.g., "The Observatory"
     diegesis: str               # e.g., "n-observatory"
     walk: str                   # e.g., "canonical"
-    slide_count: int
-    slides_with_images: int
-    has_presentation: bool      # outputs/presentation/ exists
+    slide_count: int            # always 0 for a document model: it has no slides
+    slides_with_images: int     # always 0 for a document model
+    has_presentation: bool      # a presentation of either model can be opened
+    presentation_model: PresentationModel
     has_essay: bool             # outputs/essay/ exists
 
 

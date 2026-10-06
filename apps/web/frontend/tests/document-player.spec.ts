@@ -298,7 +298,8 @@ test('private notes validate identity, follow scrolling, and drive the same docu
     await expect(popup.locator('img')).toHaveCount(0);
     await frame.evaluate('scrollTo(0, innerHeight * 2.4)');
     await expect(popup.getByTestId('speaker-note')).toHaveText('Compare two measurements.');
-    await popup.getByLabel('Jump to cue').selectOption('cue-4');
+    await popup.getByLabel('Jump to cue').click();
+    await popup.getByRole('button', { name: '5. Night', exact: true }).click();
     await expect(page.getByTestId('document-cue')).toHaveText('5 / 5');
     expect(await instance(frame)).toBe(loaded);
     expect(await popup.evaluate(() => window.opener)).toBeNull();
@@ -309,6 +310,39 @@ test('private notes validate identity, follow scrolling, and drive the same docu
     await page.getByRole('link', { name: 'Back to presentations', exact: true }).click();
     await expect.poll(() => popup.isClosed()).toBe(true);
 });
+
+for (const width of [720, 390]) {
+    test(`speaker notes expand cues downward and navigate at ${width}px`, async ({ page }) => {
+        await openDocument(page);
+        const popupPromise = page.waitForEvent('popup');
+        await page.getByRole('button', { name: 'Speaker notes', exact: true }).click();
+        const popup = await popupPromise;
+        await popup.setViewportSize({ width, height: 600 });
+        const trigger = popup.getByLabel('Jump to cue');
+        const cues = popup.getByRole('list', { name: 'Cues', exact: true });
+        await trigger.click();
+        const anchor = await trigger.boundingBox();
+        const expanded = await cues.boundingBox();
+        expect(expanded!.y).toBeGreaterThanOrEqual(anchor!.y + anchor!.height);
+        expect(expanded!.x + expanded!.width).toBeLessThanOrEqual(width);
+        await evidence(popup, `document-notes-cues-${width}.png`);
+        await popup.getByRole('button', { name: '5. Night', exact: true }).click();
+        await expect(page.getByTestId('document-cue')).toHaveText('5 / 5');
+        await expect(cues).not.toBeVisible();
+        await expect(trigger).toBeFocused();
+        await trigger.press('Enter');
+        await trigger.press('Escape');
+        await expect(cues).not.toBeVisible();
+        await trigger.click();
+        await popup.getByRole('heading', { name: 'Speaker notes', exact: true }).click();
+        await expect(cues).not.toBeVisible();
+        await trigger.press('Enter');
+        await trigger.press('Tab');
+        await popup.keyboard.press('Enter');
+        await expect(page.getByTestId('document-cue')).toHaveText('1 / 5');
+        expect(await popup.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    });
+}
 
 for (const action of ['reload', 'close'] as const) {
     test(`private notes close when the owning browser tab ${action}s`, async ({ page }) => {

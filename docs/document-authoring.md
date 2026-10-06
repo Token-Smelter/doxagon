@@ -112,6 +112,35 @@ dox document apply --project observatory select-plan.json
 
 `dox document context --json` lists every `usages[]` entry with its `stable` flag; check it before writing a bind request. `bind-slots` also assigns deterministic `dox-image-N` ids to image elements that lack one (`adopt_slots`, ./src/doxagon/renderings/document_images.py:149), so a document authored without ids can still be bound — review the proposed slot map in the plan.
 
+### Admitting artwork you already have
+
+Step 2 above assumes a variant exists. When the finished image already exists — drawn by hand, delivered by a designer, or produced outside this platform — `admit-image` registers those exact bytes as a variant of an already registered asset. Use `generation-run` when the provider is to make the image; use `admit-image` when the bytes already exist. `adopt` is a different operation for a different input: it relocates a whole legacy visual bundle under `outputs/presentation/slides/` and refuses anything else with `DOCUMENT_ADOPTION_SCOPE`.
+
+```json
+{"operation":"admit-image","key":"night-sky","source":"incoming/finished-plate.png"}
+```
+
+```json
+{"operation":"admit-image","key":"night-sky","item":"IMAGE_ITEM"}
+```
+
+Name exactly one of `source` (a project-relative file) or `item` (an inspection item id of kind `image`, `original` or `reference`). The `item` form is what an image embedded in the document needs, since such bytes exist nowhere else on disk. The plan copies the bytes to `assets/visuals/KEY/variants/admitted-<hash>.EXT` and registers the variant; `apply` promotes it. The result has the same shape a generated variant has, so `select-image` accepts it with no special case.
+
+```mermaid
+flowchart LR
+  Existing["Bytes that already exist<br/>file on disk or embedded payload"] --> Admit["asset-plan admit-image"]
+  Provider["Image provider call"] --> Run["generation-run"]
+  Admit --> Variant["variants map entry"]
+  Run --> Variant
+  Variant --> Select["select-image"]
+  Admit -.->|records| Origin["provenance admitted<br/>admitted_from + sha256"]
+  Run -.->|records| Receipt["provenance generated<br/>receipt, prompt, provider"]
+```
+
+Provenance stays honest in both directions. An admitted variant records `"provenance": "admitted"`, an `admitted_from` naming the source path or item id, and the `sha256` of the admitted bytes. It carries **no** `receipt`, prompt file, `prompt_sha256` or provider identity, because no provider call happened — the receipt chain is exactly what makes a generated image auditable, and inventing one for artwork that was never generated would make that chain worthless. Context reports the admitted variant with `provenance: admitted` and `generated_with: null`, next to any `generated`, `partial_generation` or `historical_unknown` sibling. An adopted bundle keeps a legacy `assembled_prompt.md` beside its variants; inspection reports no saved prompt for an admitted variant, because that neighbour describes a generation that produced some other image.
+
+Admission refuses, naming the cause: `DOCUMENT_ADMISSION_IMAGE_INVALID` when the bytes are not a bounded single-frame PNG/JPEG/WebP raster, `DOCUMENT_ASSET_UNKNOWN` when the named asset is not registered (register it with `create` first), and `DOCUMENT_VARIANT_EXISTS` when the asset already holds a variant admitted from these exact bytes. Variant identity is the hash of the bytes, so re-running an admission is refused rather than duplicating an image under a second name.
+
 ## Generation: candidates first
 
 The existing configured subprocess provider is selected by `DOXAGON_IMAGE_GENERATOR`. `DOXAGON_IMAGE_MODEL` optionally records its configured model identity; absent model reporting remains explicitly unknown. No credentials enter context or receipts. The executable receives the existing `--prompt-file`, `--output`, `--image-size`, `--aspect-ratio` and repeated `--source` interface. Context reports the configured executable identity/hash and supported settings.

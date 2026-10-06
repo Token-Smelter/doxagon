@@ -40,7 +40,7 @@ doxagon = [
     "resources/*.yaml",
     "resources/*.json",
     "resources/*.md",
-    "resources/skills/*/SKILL.md",
+    "resources/skills/**/*",
     "resources/demo-vault/knowledge/*.yaml",
     "resources/demo-vault/knowledge/doxai/*.md",
     "resources/demo-vault/knowledge/evidence/*.md",
@@ -60,6 +60,9 @@ html_editions = [
 "doxagon.presentations" = [
     "resources/*.js",
 ]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["**/__pycache__/*", "**/*.pyc", "**/*.pyo"]
 
 [tool.ruff]
 line-length = 120

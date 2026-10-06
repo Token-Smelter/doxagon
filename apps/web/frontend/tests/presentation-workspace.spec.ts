@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
+import { selectFromRail } from './support/rail';
 import { startVaultServer, useRealVault, type VaultServer } from './support/vaultServer';
 
 /**
@@ -53,8 +54,7 @@ async function openWorkspace(page: Page, viewport = DESKTOP) {
     await page.setViewportSize(viewport);
     await useRealVault(page.context(), server);
     await page.goto('/presentations');
-    await page.getByRole('complementary', { name: 'Presentation projects' }).hover();
-    await page.getByRole('button', { name: /Alpha/ }).click();
+    await selectFromRail(page, /Alpha/);
     await expect(page.getByTestId('checkpoint-outline').locator('li')).toHaveCount(2);
     await expect(page.getByTestId('deck-revision')).toContainText('sha256:');
 }
@@ -178,8 +178,7 @@ test('stock choreography supports absolute seek and reversible Back', async ({ p
     await page.setViewportSize(DESKTOP);
     await useRealVault(page.context(), server);
     await page.goto('/presentations');
-    await page.getByRole('complementary', { name: 'Presentation projects' }).hover();
-    await page.getByRole('button', { name: /Stock/ }).click();
+    await selectFromRail(page, /Stock/);
     await expect(page.getByTestId('checkpoint-outline').locator('li')).toHaveCount(5);
 
     const state = () => page.frameLocator('.realm iframe').locator('#doxagon-checkpoint-root').evaluate((root) => ({
@@ -222,8 +221,7 @@ test('a Step selected while the session opens remains selected', async ({ page }
         await route.fallback();
     });
     await page.goto('/presentations');
-    await page.getByRole('complementary', { name: 'Presentation projects' }).hover();
-    await page.getByRole('button', { name: /Stock/ }).click();
+    await selectFromRail(page, /Stock/);
     await started;
     const wanted = 'slide-opening-step-1';
     try {
@@ -240,8 +238,7 @@ test('the presenter console reads a deck slide by slide', async ({ page, context
     await page.setViewportSize(DESKTOP);
     await useRealVault(page.context(), server);
     await page.goto('/presentations');
-    await page.getByRole('complementary', { name: 'Presentation projects' }).hover();
-    await page.getByRole('button', { name: /Stock/ }).click();
+    await selectFromRail(page, /Stock/);
     await expect(page.getByTestId('checkpoint-outline').locator('li')).toHaveCount(5);
 
     const [presenter] = await Promise.all([
@@ -275,8 +272,7 @@ test('a deck that returns to a slide numbers it once', async ({ page, context })
     await page.setViewportSize(DESKTOP);
     await useRealVault(page.context(), server);
     await page.goto('/presentations');
-    await page.getByRole('complementary', { name: 'Presentation projects' }).hover();
-    await page.getByRole('button', { name: /Outline/ }).click();
+    await selectFromRail(page, /Outline/);
     await expect(page.getByTestId('checkpoint-outline').locator('li')).toHaveCount(5);
 
     // Send the opening slide's last Step past the second slide, so the deck
@@ -645,8 +641,7 @@ async function openProject(page: Page, name: RegExp) {
     await page.setViewportSize(DESKTOP);
     await useRealVault(page.context(), server);
     await page.goto('/presentations');
-    await page.getByRole('complementary', { name: 'Presentation projects' }).hover();
-    await page.getByRole('button', { name }).click();
+    await selectFromRail(page, name);
 }
 
 test('a refused migration lists every blocker the server published, by slide', async ({ page }) => {
@@ -855,14 +850,29 @@ test('gallery images open an in-app viewer that steps through every image', asyn
 test('presentation rail reveals on hover and focus, and compact steps can collapse', async ({ page }) => {
     await openWorkspace(page);
     const rail = page.getByRole('complementary', { name: 'Presentation projects' });
-    await page.mouse.move(1000, 100);
-    await expect.poll(async () => (await rail.boundingBox())!.width).toBe(40);
+    const editor = page.locator('.workspace-content');
+    const editorWidth = (await editor.boundingBox())!.width;
+    // `openWorkspace` leaves the rail retracted, which is the resting state.
+    expect((await rail.boundingBox())!.width).toBe(40);
     await rail.hover();
-    await expect.poll(async () => (await rail.boundingBox())!.width).toBe(230);
-    await page.mouse.move(1000, 100);
-    await page.keyboard.press('Tab');
-    await page.getByRole('button', { name: 'Toggle presentations sidebar' }).focus();
-    await expect.poll(async () => (await rail.boundingBox())!.width).toBe(230);
+    await expect.poll(async () => (await rail.boundingBox())!.width).toBe(575);
+
+    // The rail floats over the editor: revealing it must not reflow the canvas.
+    expect((await editor.boundingBox())!.width).toBe(editorWidth);
+
+    // Leaving the rail holds it open for a second, then retracts it over 750ms.
+    // The poll waits for the end state rather than the clock.
+    await page.mouse.move(1200, 400);
+    await expect.poll(async () => (await rail.boundingBox())!.width, { timeout: 10_000 }).toBe(40);
+
+    // Focus reveals it too, for a reader who never touches a pointer, and
+    // releasing focus retracts it again.
+    const railToggle = page.getByRole('button', { name: 'Toggle presentations sidebar' });
+    await railToggle.focus();
+    await expect.poll(async () => (await rail.boundingBox())!.width).toBe(575);
+    await railToggle.blur();
+    await expect.poll(async () => (await rail.boundingBox())!.width, { timeout: 10_000 }).toBe(40);
+
     await page.getByRole('button', { name: 'Collapse steps', exact: true }).click();
     await expect(page.getByTestId('checkpoint-outline')).toBeHidden();
     await page.getByRole('button', { name: 'Expand steps', exact: true }).click();
@@ -870,4 +880,93 @@ test('presentation rail reveals on hover and focus, and compact steps can collap
     const row = await outlineItem(page, FIRST).boundingBox();
     expect(row!.height).toBeLessThanOrEqual(36);
     await expect(page.getByRole('button', { name: /^Move .+ (earlier|later)$/ })).toHaveCount(0);
+});
+
+/** Reveal the rail and return its filter, its groups, and its thesis buttons. */
+async function openRail(page: Page) {
+    await page.getByRole('complementary', { name: 'Presentation projects' }).hover();
+    await expect(page.locator('.rail-group').first()).toBeVisible();
+    return {
+        filter: page.getByLabel('Filter presentations'),
+        theses: page.locator('.thesis-select'),
+        group: (slug: string) => page.locator(`.rail-group[data-diegesis="${slug}"]`),
+    };
+}
+
+test('the rail nests every thesis under its diegesis and collapses one away', async ({ page }) => {
+    await openWorkspace(page);
+    const rail = await openRail(page);
+
+    // Every scope the vault declares is listed, and `Alpha` is open, so the
+    // rail opens showing only the theses of the scope holding the presentation
+    // already on screen. A vault of any length is a list of scopes plus one.
+    const listed = await (await page.request.get(`${server.base}/api/theses`)).json();
+    const openScope = listed.filter((item: { diegesis: string }) => item.diegesis === 'synthetic');
+    await expect(page.locator('.rail-group')).toHaveCount(2);
+    await expect(rail.theses).toHaveCount(openScope.length);
+
+    // `n-cartography` is in the library, so the group carries the title the
+    // library gave it; `synthetic` is not, so that group keeps its slug.
+    const cartography = rail.group('n-cartography');
+    const scope = cartography.getByRole('button', { name: /^Cartography/ });
+    await expect(rail.group('synthetic').getByRole('button', { name: /^synthetic/ })).toBeVisible();
+    await expect(scope).toHaveAttribute('aria-expanded', 'false');
+
+    // Opening the closed scope reveals the thesis it holds, and closing it
+    // again takes that thesis away without touching any other scope.
+    await scope.click();
+    await expect(cartography.getByRole('button', { name: /Outline/ })).toBeVisible();
+    await expect(rail.theses).toHaveCount(openScope.length + 1);
+    await scope.click();
+    await expect(cartography.getByRole('button', { name: /Outline/ })).toHaveCount(0);
+
+    // One control reduces a whole vault to its scopes, and opens it again. The
+    // label follows the rail: with a scope still open it offers to collapse.
+    await page.getByRole('button', { name: 'Collapse all', exact: true }).click();
+    await expect(rail.theses).toHaveCount(0);
+    await page.getByRole('button', { name: 'Expand all', exact: true }).click();
+    await expect(rail.theses).toHaveCount(listed.length);
+});
+
+test('a scope title too long for the rail stays on one truncated line', async ({ page }) => {
+    await openWorkspace(page);
+    const rail = await openRail(page);
+
+    // A real vault names scopes in full sentences. Whatever a title's length,
+    // a scope costs the rail exactly one row, so a collapsed rail is a
+    // fixed-height list rather than a wall of wrapped headings.
+    const rows = await page.locator('.diegesis-toggle').evaluateAll((nodes) =>
+        nodes.map((node) => node.getBoundingClientRect().height),
+    );
+    expect(Math.max(...rows)).toBeLessThanOrEqual(40);
+
+    const title = rail.group('n-cartography').locator('.diegesis-title');
+    expect(await title.evaluate((node) => getComputedStyle(node).whiteSpace)).toBe('nowrap');
+    expect(await title.evaluate((node) => getComputedStyle(node).textOverflow)).toBe('ellipsis');
+});
+
+test('the filter narrows the rail by thesis, by scope, and through a collapsed scope', async ({ page }) => {
+    await openWorkspace(page);
+    const rail = await openRail(page);
+
+    await rail.filter.fill('numbered');
+    await expect(rail.theses).toHaveText([/Numbered/]);
+
+    // Naming a scope keeps every thesis inside it, so the filter reaches the
+    // grouping as well as the titles.
+    await rail.filter.fill('cartography');
+    await expect(rail.theses).toHaveText([/Outline/]);
+
+    // A hit is shown wherever it lives. Cleared, this scope is collapsed —
+    // and the filter still finds and opens the thesis inside it.
+    await rail.filter.fill('');
+    await expect(rail.group('n-cartography').getByRole('button', { name: /^Cartography/ }))
+        .toHaveAttribute('aria-expanded', 'false');
+    await rail.filter.fill('outline');
+    await rail.theses.click();
+    await expect(page.getByTestId('checkpoint-outline').locator('li')).toHaveCount(5);
+
+    await rail.filter.fill('no thesis carries this');
+    await expect(rail.theses).toHaveCount(0);
+    await expect(page.getByText(/No thesis matches/)).toBeVisible();
 });

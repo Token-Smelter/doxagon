@@ -12,4 +12,6 @@ description: Create and modify single-page HTML presentations selected by output
 
 One HTML file owns layout, animation, and cues. `presentation.json` selects that HTML and private `notes.json`; sibling legacy slides do not affect playback. Cue IDs are stable and notes must retain the same IDs and order. Change the edition whenever cues change.
 
+For cue-driven animated plates, including plates built from N generated image components, use [presentation motion](./../presentation-motion/SKILL.md).
+
 Use `dox document context --project <project> --json` to inspect bounded context, then use the document plan/apply flow for changes. Validate delivered HTML in a browser before delivery. Do not embed private notes in HTML, regenerate imagery merely for an edit, or change player code to fix a document problem.
