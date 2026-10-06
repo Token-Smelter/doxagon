@@ -90,7 +90,7 @@
 <main class="notes" aria-label="Document speaker notes">
     <header>
         <div class="heading"><h1>Speaker notes</h1>{#if endPresentation}<button type="button" on:click={endPresentation}>End presentation</button>{/if}</div>
-        <DocumentControls {ready} {position} {connected} on:next={() => navigate('next')} on:previous={() => navigate('previous')} on:go={(event) => go(event.detail)} />
+        <DocumentControls {ready} {position} {connected} expandableCues on:next={() => navigate('next')} on:previous={() => navigate('previous')} on:go={(event) => go(event.detail)} />
         {#if !connected}<p role="status">Document disconnected. Reconnect from the player to continue.</p>{/if}
     </header>
     <section class="reading" aria-label="Current note">
@@ -125,7 +125,7 @@
 <style>
     :global(body) { margin: 0; }
     .notes { min-height: 100%; background: #efe6d2; color: #16130f; font: 18px/1.55 Georgia, serif; }
-    header { position: sticky; top: 0; padding: 1rem 1.5rem; color: #efe6d2; background: #16130f; font: 14px/1.5 system-ui, sans-serif; }
+    header { position: sticky; top: 0; z-index: 1; padding: 1rem 1.5rem; color: #efe6d2; background: #16130f; font: 14px/1.5 system-ui, sans-serif; }
     .heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.75rem; }
     h1 { font-size: 1.1rem; margin: 0; }
     .heading button { padding: 0.5rem 0.75rem; min-height: 44px; border: 1px solid #b9af9d; color: inherit; background: transparent; font: inherit; cursor: pointer; }

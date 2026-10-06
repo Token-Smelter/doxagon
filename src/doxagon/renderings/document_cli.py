@@ -154,15 +154,26 @@ def recover(project):
 @click.option('--request', type=click.Path(exists=True, path_type=Path), required=True)
 @click.option('--output', type=click.Path(path_type=Path), required=True)
 def asset_plan(project, snapshot, request, output):
-    """Plan create, create-style, adopt, bind-slots or select-image from JSON.
+    """Plan create, create-style, adopt, admit-image, bind-slots or select-image.
 
     Create: {operation:create, key, definition (text), dialect, references:{filename:item-id}}.
     Dialect defaults to the definition's frontmatter dialect, else legacy-bundle/1.
     Create-style uses the same fields with operation:create-style.
     Adopt: {operation:adopt, key, source (project-relative bundle)}.
+    Admit: {operation:admit-image, key, source (project-relative file)} or
+    {operation:admit-image, key, item (inspection item id)}.
     Bind: {operation:bind-slots, associations:{slot:asset}}.
     Select: {operation:select-image, key, variant, slots:[slot], quality:88}.
     Inspect the written plan, then use document apply.
+
+    Admit-image registers artwork you already have as a variant of an asset
+    that is already registered, for the case where the image exists and no
+    generation produced it. Use generation-run when the provider is to make the
+    image; use admit-image when the bytes already exist. An admitted variant
+    records provenance "admitted", the source path or item id it came from and
+    the sha256 of the admitted bytes, and carries no prompt, provider identity
+    or receipt, because no provider call happened. It is otherwise an ordinary
+    variant: select-image accepts it exactly as it accepts a generated one.
 
     References are bound by item id from the snapshot: each "references" value
     is an inspection item id of kind image, original or reference, and the plan
@@ -178,7 +189,7 @@ def asset_plan(project, snapshot, request, output):
     image elements that lack one. data-slot on a figure is a document's own CSS
     convention and produces no stable slot. See docs/document-authoring.md.
     """
-    from .document_assets import plan_create_asset, plan_adopt_bundle, plan_bind_slots, plan_select_image
+    from .document_assets import plan_admit_image, plan_create_asset, plan_adopt_bundle, plan_bind_slots, plan_select_image
     try:
         view = inspect_document(resolve_document_project(project), snapshot)
         value = read_json(request)
@@ -187,6 +198,8 @@ def asset_plan(project, snapshot, request, output):
             result = plan_create_asset(view, value['key'], value['definition'].encode(), value.get('dialect'), value.get('references'), style=operation == 'create-style')
         elif operation == 'adopt':
             result = plan_adopt_bundle(view, value['key'], value['source'])
+        elif operation == 'admit-image':
+            result = plan_admit_image(view, value['key'], value.get('source'), value.get('item'))
         elif operation == 'bind-slots':
             result = plan_bind_slots(view, value['associations'])
         elif operation == 'select-image':

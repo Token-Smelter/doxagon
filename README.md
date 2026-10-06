@@ -69,7 +69,14 @@ Install a checkout with `pipx install -e <checkout>`, or expose
 vault binding, packaged skills, provider, and frontend build. A non-Docker web
 install also needs `npm run build` from `apps/web/frontend/`; Docker builds that
 stage itself. After `git pull` (or a package upgrade), run `dox skills sync` to
-refresh platform-owned skills in the selected vault.
+refresh platform-owned skills in the selected vault. Sync includes nested recipes,
+scripts, samples and licensed dependencies, preserves local edits, and removes
+retired files only when their bytes still match the platform-owned version.
+
+The [presentation-motion skill](./src/doxagon/resources/skills/presentation-motion/SKILL.md)
+ships cinematic layers, living engraving and miniature 3D recipes. Its synthetic
+comparison varies visual styles independently of cues and timing, with a separate
+Doxagon image-generation workflow. It ships machinery and fixtures, not a presentation.
 
 See [document inspection](docs/document-inspection.md) and
 [authoring](docs/document-authoring.md) for the integrated workspace. Before

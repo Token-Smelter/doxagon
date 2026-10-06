@@ -186,9 +186,11 @@ def inspect_generation_details(view: Inspection, authoring: dict, registry: dict
                 if isinstance(error, DocumentWorkspaceError) and error.code == 'DOCUMENT_LIMIT':
                     raise
                 result['issues'].append('The generation receipt could not be verified against this image.')
-        else:
+        elif (candidate or {}).get('provenance') != 'admitted':
             # Conventional bundle artifacts are inspectable, but a shared
-            # assembled_prompt.md may describe a different generation.
+            # assembled_prompt.md may describe a different generation. Admitted
+            # bytes were never produced in this bundle, so a neighbouring prompt
+            # belongs to another image and is not evidence about this one.
             for path in [str(Path(image['path']).with_suffix('.prompt.md')),
                          str(Path(image['path']).parent / 'assembled_prompt.md')]:
                 prompt = file(path, 'prompt', optional=True)

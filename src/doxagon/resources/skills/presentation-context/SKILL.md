@@ -12,4 +12,4 @@ description: Load presentation context before reading or changing a project.
 
 The context command identifies the authoritative model, argument sources (thesis, diegesis, walk), cue and notes agreement, and the skill to use next. It is read-only and never selects an active project.
 
-For a document-model project, invoke `presentation-document`. For legacy slides, read `docs/SLIDE_ARCHITECTURE.md` and edit only the reported authoritative slide sources. Do not infer a model from another project or edit before loading context.
+For a document-model project, invoke `presentation-document`; for animation on that model, continue with [presentation motion](./../presentation-motion/SKILL.md). For legacy slides, read `docs/SLIDE_ARCHITECTURE.md` and edit only the reported authoritative slide sources. Do not infer a model from another project or edit before loading context.

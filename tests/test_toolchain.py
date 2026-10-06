@@ -160,11 +160,12 @@ def test_legacy_skills_manifest_upgrades_without_reflagging_skills(tmp_path):
     }, indent=2))
 
     before = resource_status(vault)
-    assert {record['status'] for name, record in before.items() if name != 'AGENTS.md'} == {'current'}
-    assert before['AGENTS.md']['status'] == 'missing'
+    assert {before[name]['status'] for name in packaged} == {'current'}
+    attachments = set(toolchain.packaged_resources()) - set(packaged)
+    assert {before[name]['status'] for name in attachments} == {'missing'}
 
     report = toolchain.sync_agent_resources(vault)
-    assert report['created'] == ['AGENTS.md'] and report['foreign'] == []
+    assert set(report['created']) == attachments and report['foreign'] == []
     assert {record['status'] for record in resource_status(vault).values()} == {'current'}
     upgraded = json.loads((vault / toolchain.MANIFEST_PATH).read_text())
     assert upgraded['schema'] == toolchain.AGENT_RESOURCES_MANIFEST_SCHEMA

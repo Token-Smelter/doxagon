@@ -1,4 +1,5 @@
 import { expect, test as base, type Page } from '@playwright/test';
+import { selectFromRail } from './support/rail';
 import { startVaultServer, useRealVault, type VaultServer } from './support/vaultServer';
 
 // Every test owns its vault: edits and deletions must not change what another
@@ -16,8 +17,7 @@ const generationStyles = (page: Page) => page.getByRole('group', { name: 'Styles
 
 async function openEditor(page: Page) {
     await page.goto('/presentations');
-    await page.getByRole('complementary', { name: 'Presentation projects' }).hover();
-    await page.getByRole('button', { name: /Alpha/ }).click();
+    await selectFromRail(page, /Alpha/);
     await expect(page.getByTestId('checkpoint-outline').locator('li')).toHaveCount(2);
     if ((page.viewportSize()?.width ?? 1440) < 768) {
         await page.getByRole('button', { name: 'Inspector', exact: true }).click();
@@ -167,15 +167,13 @@ test('changing presentations clears style drafts and generation selections', asy
     await generationStyles(page).getByRole('checkbox', { name: 'ink', exact: true }).check();
     await styleRow(page).getByRole('button', { name: 'Edit', exact: true }).click();
     await page.getByLabel('Style prompt', { exact: true }).fill('A draft for Alpha only');
-    await page.getByRole('complementary', { name: 'Presentation projects' }).hover();
-    await page.getByRole('button', { name: /Stock/ }).click();
+    await selectFromRail(page, /Stock/);
     await expect(page.getByTestId('checkpoint-outline').locator('li')).toHaveCount(5);
     await page.getByRole('tab', { name: 'Media', exact: true }).click();
     await expect(styleRow(page)).toHaveCount(0);
     await expect(page.getByLabel('Style name', { exact: true })).toHaveValue('');
     await expect(page.getByLabel('Style prompt', { exact: true })).toHaveValue('');
-    await page.getByRole('complementary', { name: 'Presentation projects' }).hover();
-    await page.getByRole('button', { name: /Alpha/ }).click();
+    await selectFromRail(page, /Alpha/);
     await page.getByRole('tab', { name: 'Media', exact: true }).click();
     await expect(styleRow(page)).toContainText('Black ink on warm paper.');
     await expect(generationStyles(page).getByRole('checkbox', { name: 'ink', exact: true })).not.toBeChecked();

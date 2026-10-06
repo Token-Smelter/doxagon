@@ -439,7 +439,7 @@ def inspect_document(project: DocumentProject, expected: str | None = None) -> I
         'cues': inventory.cues, 'sections': inventory.sections, 'usages': inventory.usages,
         'checks': view.checks, 'coverage': 'partial',
         'authoring': authoring,
-        'capabilities': {'inspect': True, 'edit': True, 'generate': True, 'adopt_assets': True, 'select_image': True,
+        'capabilities': {'inspect': True, 'edit': True, 'generate': True, 'adopt_assets': True, 'admit_image': True, 'select_image': True,
                          'commands': ['context', 'inspect', 'plan', 'asset-plan', 'apply', 'validate', 'recover', 'generation-plan', 'generation-run', 'generation-job']},
     }
     return view

@@ -35,6 +35,7 @@ from doxagon.models import (
     SetPrimaryResponse,
 )
 from apps.web.backend.routers.job_output import append_output, mark_complete
+from apps.web.backend.routers.presentation_model import presentation_model
 from doxagon.presentation_backends import provider_command, resolve_image_generator_path
 from doxagon.presentations.migration import LegacyReadAdapter, is_migrated
 
@@ -363,7 +364,10 @@ def get_thesis_list_item(thesis_dir: Path, diegesis_filter: str | None = None, w
     if walk_filter and walk != walk_filter:
         return None
 
+    # A document has no slides to count, so these stay zero for it. They report
+    # the legacy tree only, and `presentation_model` says which model applies.
     slide_count, slides_with_images = count_slides(thesis_dir)
+    model = presentation_model(thesis_dir)
 
     return ThesisListItem(
         slug=thesis_dir.name,
@@ -372,7 +376,8 @@ def get_thesis_list_item(thesis_dir: Path, diegesis_filter: str | None = None, w
         walk=walk,
         slide_count=slide_count,
         slides_with_images=slides_with_images,
-        has_presentation=(thesis_dir / "outputs" / "presentation").exists(),
+        has_presentation=model != "none",
+        presentation_model=model,
         has_essay=(thesis_dir / "outputs" / "essay").exists(),
     )
 

@@ -3,6 +3,7 @@ import frontmatter
 import yaml
 from doxagon.config import DIEGESES_DIR, THESES_DIR
 from doxagon.models import DiegesisListItem, DiegesisDetail, DiegesisSection, ThesisRef
+from apps.web.backend.routers.presentation_model import presentation_model
 
 router = APIRouter(prefix="/diegeses", tags=["diegeses"])
 
@@ -23,11 +24,12 @@ def find_theses_for_diegesis(diegesis_slug: str) -> list[ThesisRef]:
             with open(config_path) as f:
                 config = yaml.safe_load(f)
             if config.get('diegesis') == diegesis_slug:
-                has_presentation = (thesis_dir / "outputs" / "presentation").exists()
+                model = presentation_model(thesis_dir)
                 results.append(ThesisRef(
                     slug=thesis_dir.name,
                     walk=config.get('walk', 'canonical'),
-                    has_presentation=has_presentation
+                    has_presentation=model != "none",
+                    presentation_model=model,
                 ))
         except Exception:
             pass

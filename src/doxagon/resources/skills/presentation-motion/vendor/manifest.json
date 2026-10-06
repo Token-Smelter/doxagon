@@ -1,0 +1,127 @@
+{
+  "gsap": "3.14.2",
+  "three": "0.180.0",
+  "hyperframes": "65d66cb2c3494e498780897eb4a371ee05e27735",
+  "files": [
+    {
+      "path": "DrawSVGPlugin.min.js",
+      "sha256": "2d2b28b7b1ad56cd5ca0d3032ed0f56503d0aaba6b5467169dc596d96e1125e3",
+      "source": "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/DrawSVGPlugin.min.js"
+    },
+    {
+      "path": "GSAP-LICENSE.txt",
+      "sha256": "5a5a8dacd22c6e95d52e9d7174b38c93a1e936c615af368c161f12fe2fdf9446",
+      "source": "https://gsap.com/standard-license/"
+    },
+    {
+      "path": "MorphSVGPlugin.min.js",
+      "sha256": "40e4246c7f898f5204a9d3f02c34672e7da589c297c157cdff714e87a362b045",
+      "source": "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/MorphSVGPlugin.min.js"
+    },
+    {
+      "path": "MotionPathPlugin.min.js",
+      "sha256": "aa5f955ca4ce3095ebe5726f43a46b72532230edb3501b28fb853f189f023cab",
+      "source": "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/MotionPathPlugin.min.js"
+    },
+    {
+      "path": "THREE-LICENSE.txt",
+      "sha256": "bfe119ea4fd413f5f7ca3fcd63adb0c4a073ed39daa2fe7d3e6b769e21272601",
+      "source": "https://cdn.jsdelivr.net/npm/three@0.180.0/LICENSE"
+    },
+    {
+      "path": "deps.ts",
+      "sha256": "399088e586098d15f189879719c4f72e31adfbe849d8d86f0a0ee0cb25e7383b",
+      "source": "local entry or derived bundle"
+    },
+    {
+      "path": "fonts/OFL-jetbrainsmono.txt",
+      "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d",
+      "source": "./fonts/README.md"
+    },
+    {
+      "path": "fonts/OFL-newsreader.txt",
+      "sha256": "fdfad38143ec470553cae82a1e45320bdd1b9ec70415d37bd0171051d8a4ded8",
+      "source": "./fonts/README.md"
+    },
+    {
+      "path": "fonts/OFL-spacegrotesk.txt",
+      "sha256": "564ce565c371c5e5bbf286006565a7c9aa55a9f56e7ca58d56e05d649dd61a72",
+      "source": "./fonts/README.md"
+    },
+    {
+      "path": "fonts/README.md",
+      "sha256": "40573114caaa14661cc7edfcfa0d6d6c88d4017040e680a7f80529d61c8ee0d2",
+      "source": "./fonts/README.md"
+    },
+    {
+      "path": "fonts/jetbrains-mono-latin.woff2",
+      "sha256": "83c005d49d8a6a50474c73a5a36ac0468076e9c4a29da7bdb14995d80560a5be",
+      "source": "./fonts/README.md"
+    },
+    {
+      "path": "fonts/newsreader-latin.woff2",
+      "sha256": "6e4f2958c3a7c4a80acde4e5a679abe7e01bc1e30b92be3c7a8b696ef401d101",
+      "source": "./fonts/README.md"
+    },
+    {
+      "path": "fonts/space-grotesk-latin.woff2",
+      "sha256": "0640890476fc1198ab4de571fb658de443c4d85b66466ec09534a8737ab1ce9d",
+      "source": "./fonts/README.md"
+    },
+    {
+      "path": "gsap.min.js",
+      "sha256": "c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280",
+      "source": "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"
+    },
+    {
+      "path": "hyperframes/LICENSE",
+      "sha256": "4259155fb06f127687ee7b0a8a3682d45132db0f2da26cbc0b7a2d1e796436b8",
+      "source": "https://raw.githubusercontent.com/heygen-com/hyperframes/65d66cb2c3494e498780897eb4a371ee05e27735/LICENSE"
+    },
+    {
+      "path": "hyperframes/packages/core/src/runtime/adapters/seek-dispatch.ts",
+      "sha256": "d0471c651174a35475e09a06f9db45e7ca0c8f2ad8faf8963aeb4a9afa2f3325",
+      "source": "https://raw.githubusercontent.com/heygen-com/hyperframes/65d66cb2c3494e498780897eb4a371ee05e27735/packages/core/src/runtime/adapters/seek-dispatch.ts"
+    },
+    {
+      "path": "hyperframes/packages/core/src/runtime/adapters/three.ts",
+      "sha256": "39a10556087cb4911408c02e285adf8e43a4b681bd3e936cb817cdf266c9e76a",
+      "source": "https://raw.githubusercontent.com/heygen-com/hyperframes/65d66cb2c3494e498780897eb4a371ee05e27735/packages/core/src/runtime/adapters/three.ts"
+    },
+    {
+      "path": "hyperframes/packages/core/src/runtime/diagnostics.ts",
+      "sha256": "26ed5353cdf4f8c5ea8fd76e1e11a6c9b0e70d830ebfea7550bd57b090c21244",
+      "source": "https://raw.githubusercontent.com/heygen-com/hyperframes/65d66cb2c3494e498780897eb4a371ee05e27735/packages/core/src/runtime/diagnostics.ts"
+    },
+    {
+      "path": "hyperframes/packages/core/src/runtime/globals.ts",
+      "sha256": "17b475ec6dd10b06e84c1df14f1f8fd21624909214fbf0d1753e97d5c85c631e",
+      "source": "https://raw.githubusercontent.com/heygen-com/hyperframes/65d66cb2c3494e498780897eb4a371ee05e27735/packages/core/src/runtime/globals.ts"
+    },
+    {
+      "path": "hyperframes/packages/shader-transitions/src/shaders/common.ts",
+      "sha256": "6ce641c3b00f35fa625f59252e6f588834c08f5eb6016c938d51721a3ee05692",
+      "source": "https://raw.githubusercontent.com/heygen-com/hyperframes/65d66cb2c3494e498780897eb4a371ee05e27735/packages/shader-transitions/src/shaders/common.ts"
+    },
+    {
+      "path": "hyperframes/packages/shader-transitions/src/shaders/registry.ts",
+      "sha256": "b12fc7e88fd9917ebb5e60bbfc5681402cfe2dabd2f758ac88310d2518fcae00",
+      "source": "https://raw.githubusercontent.com/heygen-com/hyperframes/65d66cb2c3494e498780897eb4a371ee05e27735/packages/shader-transitions/src/shaders/registry.ts"
+    },
+    {
+      "path": "motion-deps.min.js",
+      "sha256": "1fda2bdcae9cceb685a220e3630ecf2fecd9739421c537dc941e804af6a0fed0",
+      "source": "local entry or derived bundle"
+    },
+    {
+      "path": "three.core.js",
+      "sha256": "eb077d2417f61d3e6d9264c317cabc4ea35769ed6b0ab533067292a550784c20",
+      "source": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.core.js"
+    },
+    {
+      "path": "three.module.js",
+      "sha256": "c8211c69345d2e9949dc7a8ac969380497aa0600a5a8ac6a459c8cd02dd9cb8a",
+      "source": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
+    }
+  ]
+}

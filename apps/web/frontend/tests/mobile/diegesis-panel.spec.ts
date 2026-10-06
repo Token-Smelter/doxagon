@@ -14,9 +14,13 @@ test.describe('DiegesisPanel mobile drawer', () => {
                 body: 'Description with [[alpha]].'
             } });
         });
+        // The shape `list_theses` really returns, `presentation_model` included:
+        // a fixture missing it would prove the card works on an input no
+        // producer sends. `tests/test_presentation_model_api.py` pins it.
         await page.route('**/api/theses?diegesis=test-diegesis', (route) => route.fulfill({ json: [{
             slug: 'thesis-one', name: 'Thesis One', diegesis: 'test-diegesis', walk: 'canonical',
-            slide_count: 2, slides_with_images: 1, has_presentation: true, has_essay: false
+            slide_count: 2, slides_with_images: 1, has_presentation: true,
+            presentation_model: 'slides', has_essay: false
         }] }));
     }
 
