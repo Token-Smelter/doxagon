@@ -30,7 +30,7 @@
     },
     {
       "path": "deps.ts",
-      "sha256": "399088e586098d15f189879719c4f72e31adfbe849d8d86f0a0ee0cb25e7383b",
+      "sha256": "02f1452c10a7556b11ac9bfc84d7d608ce622877999f5af606fd9d69ded9bbb7",
       "source": "local entry or derived bundle"
     },
     {
@@ -110,8 +110,33 @@
     },
     {
       "path": "motion-deps.min.js",
-      "sha256": "1fda2bdcae9cceb685a220e3630ecf2fecd9739421c537dc941e804af6a0fed0",
+      "sha256": "c735e71c16fb9995545580f259aa7ab77e80359a96679a49c0a85221234bb6aa",
       "source": "local entry or derived bundle"
+    },
+    {
+      "path": "three-addons/environments/RoomEnvironment.js",
+      "sha256": "c20f0b4677f6128a138d7152b85cbef9091f4f45cdfa05adca04d40c1697c7ae",
+      "source": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/environments/RoomEnvironment.js"
+    },
+    {
+      "path": "three-addons/geometries/RoundedBoxGeometry.js",
+      "sha256": "c1b7c9bd2cddff2e3f3a0723f618a3d364a47450e3d25771d21faed88410bec8",
+      "source": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/geometries/RoundedBoxGeometry.js"
+    },
+    {
+      "path": "three-addons/lines/LineMaterial.js",
+      "sha256": "8450d827153d2509e43513cd123df786d7c8c7cdbfd4c7eea4c9e1621f2a7fb5",
+      "source": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/lines/LineMaterial.js"
+    },
+    {
+      "path": "three-addons/lines/LineSegments2.js",
+      "sha256": "5d707b4e6056945b3b34cd8291b6afe16c913f6b1e8eac7b6d6892f41c45c26d",
+      "source": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/lines/LineSegments2.js"
+    },
+    {
+      "path": "three-addons/lines/LineSegmentsGeometry.js",
+      "sha256": "471f0a954a0c9c59d3d151392f424142a9164a722802f63b371971378a84a1b1",
+      "source": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/lines/LineSegmentsGeometry.js"
     },
     {
       "path": "three.core.js",

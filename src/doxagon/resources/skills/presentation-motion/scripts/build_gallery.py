@@ -1,4 +1,4 @@
-"""Build the consolidated, offline sample sheet: motion recipes, 2D eigenvectors and a 3D transformation."""
+"""Build the consolidated, offline sample sheet: motion recipes, 2D eigenvectors, a 3D transformation and 3D looks."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import runpy
 ROOT = Path(__file__).resolve().parents[1]
 motion = runpy.run_path(str(ROOT / "scripts/build_sample.py"))
 math = runpy.run_path(str(ROOT / "scripts/build_math_sample.py"))
+stage_sample = runpy.run_path(str(ROOT / "scripts/build_stage_sample.py"))
 
 PAGE_CSS = """html{background:#101b2a;color:#e8eff7}body{margin:0;font:16px/1.5 MotionSans,sans-serif}
 main{max-width:1190px;margin:auto;padding:28px 24px 40px}
@@ -41,7 +42,7 @@ footer{font-size:13px;color:#a9b9cb;margin-top:28px;border-top:1px solid #3a506b
 
 TABS = """<script>
 (()=>{const tabs=[...document.querySelectorAll('[role=tab]')];
-const pause={motion:()=>window.motion?.pause(),plane:()=>window.mathLesson?.pause(),space:()=>window.spaceLesson?.pause()};
+const pause={motion:()=>window.motion?.pause(),plane:()=>window.mathLesson?.pause(),space:()=>window.spaceLesson?.pause(),stage:()=>window.stageSample?.pause()};
 function select(tab){tabs.forEach(t=>{const on=t===tab;t.setAttribute('aria-selected',String(on));t.tabIndex=on?0:-1;
 document.getElementById(t.getAttribute('aria-controls')).hidden=!on;if(!on)pause[t.dataset.sampleTab]();});}
 tabs.forEach((tab,i)=>{tab.addEventListener('click',()=>select(tab));tab.addEventListener('keydown',e=>{
@@ -54,13 +55,14 @@ def build(output: Path, case: Path | None = None, assets: Path | None = None) ->
     if "outputs" in output.parts and "document" in output.parts:
         raise ValueError("Build a draft sample sheet, not an authoritative document")
     plate = motion["parts"](case or ROOT / "samples/inspection.json", assets)
-    plane, space = math["parts"]("plane"), math["parts"]("space")
+    plane, space, stage = math["parts"]("plane"), math["parts"]("space"), stage_sample["parts"]()
     output.mkdir(parents=True, exist_ok=False)
-    css = motion["fonts_css"]() + plate["css"] + plane["css"]
+    css = motion["fonts_css"]() + plate["css"] + plane["css"] + stage["css"]
     tabs = [
         ("motion", "Motion recipes"),
         ("plane", "2D eigenvectors"),
         ("space", "3D transformation"),
+        ("stage", "3D looks"),
     ]
     tablist = (
         '<div role="tablist" aria-label="Samples">'
@@ -90,6 +92,7 @@ def build(output: Path, case: Path | None = None, assets: Path | None = None) ->
         )
         + panel("plane", plane["title"], plane["intro"], plane["style"], plane["figure"] + plane["below"], True)
         + panel("space", space["title"], space["intro"], space["style"], space["figure"] + space["below"], True)
+        + panel("stage", stage["title"], stage["intro"], stage["style"], stage["figure"] + stage["below"], True)
     )
     scripts = (
         motion["vendor_scripts"]()
@@ -99,9 +102,12 @@ def build(output: Path, case: Path | None = None, assets: Path | None = None) ->
         + plane["mount"]
         + space["program"]
         + space["mount"]
+        + stage["program"]
+        + stage["mount"]
         + plate["controls"]
         + plane["controls"]
         + space["controls"]
+        + stage["controls"]
         + TABS
     )
     page = (
@@ -109,7 +115,7 @@ def build(output: Path, case: Path | None = None, assets: Path | None = None) ->
         "<title>Presentation motion samples</title><style>" + PAGE_CSS + css + "</style><main>"
         '<header class="sheet-head"><div><h1>Presentation motion samples</h1>'
         "<p>Seekable animation for Doxagon documents: rendering recipes with generated image components, "
-        "and geometry-first mathematical explanations in two and three dimensions.</p></div></header>"
+        "geometry-first mathematical explanations in two and three dimensions, and 3D looks on the stage library.</p></div></header>"
         + tablist
         + panels
         + "<footer>Synthetic fixtures and original mathematical examples. Everything is inlined; no network requests, "
@@ -124,6 +130,7 @@ def build(output: Path, case: Path | None = None, assets: Path | None = None) ->
         "motion_case": config["title"],
         "motion_images": plate["receipts"],
         "math_lessons": {"plane": plane["report"], "space": space["report"]},
+        "stage": stage["report"],
         "html_sha256": sha256(page.encode()).hexdigest(),
         "bytes": len(page.encode()),
     }

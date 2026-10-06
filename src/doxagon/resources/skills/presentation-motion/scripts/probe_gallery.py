@@ -1,4 +1,4 @@
-"""Probe the consolidated sample sheet, including the 3D lesson, inside the document CSP."""
+"""Probe the consolidated sample sheet, including the 3D lesson and the 3D looks tab, inside the document CSP."""
 
 import argparse
 from html import escape
@@ -151,8 +151,26 @@ def probe(html: Path, output: Path) -> dict:
             frame.evaluate("() => {spaceLesson.go(0);spaceLesson.go(4,true);spaceLesson.go(1)}")
             frame.wait_for_timeout(150)
             check(f"{width}-new-cue-cancels-travel", frame.evaluate("() => spaceLesson.state().time") == 8)
+            frame.locator("#tab-stage").click()
+            check(f"{width}-stage-tab-shows-one-panel", visible_panels(frame) == ["panel-stage"])
+            frame.wait_for_function("() => document.querySelector('#stage-sample').dataset.doxReady === 'true'")
+            frame.locator('[data-stage-look="xray-ink"]').click()
+            check(
+                f"{width}-stage-look-changes-by-parameters",
+                frame.evaluate("() => stageSample.look.background") == "#ffffff",
+            )
+            frame.locator('[data-stage-look="gloss"]').click()
+            frame.locator('[data-stage-skin="wrap"]').click()
+            check(
+                f"{width}-stage-skin-by-role",
+                frame.evaluate("() => stageSample.look.skins.housing.mode") == "wrap",
+            )
+            frame.locator('[data-stage-skin="none"]').click()
+            frame.locator('[data-stage-look="satin"]').click()
+            frame.locator("#tab-space").click()
+            check(f"{width}-switching-pauses-stage", not frame.evaluate("() => stageSample.state.playing"))
             check(f"{width}-no-overflow", frame.evaluate("() => document.documentElement.scrollWidth <= innerWidth"))
-            for key in ["motion", "plane", "space"]:
+            for key in ["motion", "plane", "space", "stage"]:
                 frame.locator(f"#tab-{key}").click()
                 file = f"sheet-{width}-{key}.png"
                 page.screenshot(path=str(output / file))

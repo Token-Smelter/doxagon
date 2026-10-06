@@ -15,6 +15,14 @@
 | Lifecycle | Offscreen/hidden playback pauses; textures and listeners are released |
 | Image pipeline | Per component: assembled prompt and reference review, real variant IDs, alpha review, separate selection and preserved provenance; for layers, an overlay review of registration |
 
+## Run the self-test
+
+`scripts/selftest.py` is the skill's own test suite and travels with it ([self-test](./../scripts/selftest.py)). Default checks cover the mathematical identities, component and profile consistency, dependency hashes, documentation links, offline builds and the request and alpha tools. `--pipeline` drives the real `dox` CLI through a synthetic vault; `--browser` runs the probes below and previews the stage sample and every starter. The platform test suite only installs the skill and runs this self-test, so there is one source of truth.
+
+## Preview a 3D scene
+
+[`preview_scene.py`](./../scripts/preview_scene.py) checks any scene that exposes the [stage contract](./stage.md), whatever built it. It writes one contact sheet of every hold at desktop and mobile widths and fails on: a hold that differs after other seeks, content touching the frame edge, a blank hold, a canvas above the pixel-ratio cap, reduced motion that travels or moves, script errors, network requests or horizontal overflow. Frame times are reported, not judged.
+
 ## Reproduce the packaged check
 
 ```bash

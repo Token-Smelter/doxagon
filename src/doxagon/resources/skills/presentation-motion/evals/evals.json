@@ -31,6 +31,18 @@
       "prompt": "I want custom illustrations for the moving parts of this animated plate: the three layers of the device, a repeated sensor, and an emblem at the end. Use Doxagon's image generation, but don't spend anything until I've seen the prompts.",
       "expected_output": "One asset per component under one shared project style, role contracts in definitions, a registration reference for layers, N reviewed generation plans with a stated count before any run, alpha and overlay review, selection into stable slots.",
       "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Animate the plate that explains how a support request is triaged: intake, classification, routing to one of three queues, and escalation when a deadline passes. Keep it consistent with our document and the existing cues.",
+      "expected_output": "Chooses a flat SVG treatment (flow and sequence carry the meaning; no form in space) with cue holds, and says why 3D is not warranted; no stage scene built.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "Our chapter shows a shipping container being inspected. Make the container a 3D object and give its sides a printed livery that fits our coastal insurance story, generated through Doxagon. Don't spend anything until I've seen the prompt.",
+      "expected_output": "3D justified by form; a skin-wrap component whose aspect follows the wrapped span and a platform ratio, a subject-derived motif (not the sample harbour), prompt shown before any paid run, selection into a slot referenced by skin.image, preview evidence.",
+      "files": []
     }
   ]
 }
