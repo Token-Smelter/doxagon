@@ -277,10 +277,15 @@ def contracts(work: Path) -> list[tuple[str, bool, object]]:
     creates = [n for n in files if n.startswith("create-") and n != "create-style.json"]
     definitions = " ".join(files[n]["definition"] for n in creates)
     wrap = requests["component_request"](
-        {"key": "hull", "role": "skin-wrap", "description": "A coastline.", "aspect_ratio": "16:9"},
+        {"key": "hull", "role": "skin-wrap", "description": "A coastline.", "aspect_ratio": "3:2"},
         "demo-hull",
         "demo-style",
     )["definition"]
+    skin_plan = requests["requests"](
+        {"components": [{"key": "hull", "role": "skin-wrap", "description": "A coastline.", "aspect_ratio": "3:2"}]},
+        next(iter(profiles)),
+        "selftest",
+    )
     try:
         requests["component_request"](
             {"key": "hull", "role": "skin-wrap", "description": "x", "aspect_ratio": "21:9"}, "x", "y"
@@ -291,7 +296,11 @@ def contracts(work: Path) -> list[tuple[str, bool, object]]:
     rows.append(
         (
             "asset-requests-describe-skins-as-surfaces",
-            "aspect_ratio: '16:9'" in wrap and "silhouette" not in wrap and "panorama" in wrap and refused_ratio,
+            "aspect_ratio: '3:2'" in wrap
+            and "silhouette" not in wrap
+            and "panorama" in wrap
+            and refused_ratio
+            and "--aspect-ratio 3:2" in " ".join(skin_plan["sequence.json"]["steps"]),
             None,
         )
     )

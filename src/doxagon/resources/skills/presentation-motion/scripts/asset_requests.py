@@ -49,8 +49,9 @@ def style_request(profile_name: str, key: str) -> dict:
 
 def component_request(component: dict, key: str, style_key: str, reference: str | None = None) -> dict:
     key_name(key)
-    # A wrap wants the wrapped span over its height ((width + depth) / height for a box); take the closest wider
-    # platform ratio and let the wrap crop its calm top edge.
+    # A wrap wants the wrapped span over its height ((width + depth) / height for a box). Providers offer fewer
+    # ratios than the platform (`dox doctor` lists them); take the provider's closest to the span and let the wrap
+    # crop the calm top edge.
     aspect = component.get("aspect_ratio", "1:1")
     if aspect not in ASPECT_RATIOS:
         raise ValueError(f"aspect_ratio must be one of {', '.join(sorted(ASPECT_RATIOS))}, not {aspect!r}")
@@ -80,8 +81,9 @@ def requests(
     own_style = style_key is None
     style_key = style_key or key_name(f"{prefix}-{style}")
     files = {"create-style.json": style_request(style, style_key)} if own_style else {}
-    keys = {}
+    keys, ratios = {}, {}
     for component in case["components"]:
+        ratios[component["key"]] = component.get("aspect_ratio", "1:1")
         keys[component["key"]] = key_name(f"{prefix}-{component['key']}")
         files[f"create-{component['key']}.json"] = component_request(
             component, keys[component["key"]], style_key, reference
@@ -97,12 +99,13 @@ def requests(
         "steps": (["Plan, review and apply create-style.json"] if own_style else [])
         + [f"Refresh context; plan, review and apply create-{name}.json" for name in keys]
         + [
-            f"dox document generation-plan --asset {key} --variants 1 --resolution 1k --aspect-ratio 1:1"
-            for key in keys.values()
+            f"dox document generation-plan --asset {key} --variants 1 --resolution 1k --aspect-ratio {ratios[name]}"
+            for name, key in keys.items()
         ]
         + [
             "Review every assembled prompt, then run approved plans with generation-run",
-            "Inspect each candidate with check_alpha.py; record any derived matte as an admitted derivative",
+            "Inspect transparent components with check_alpha.py; record any derived matte as an admitted derivative",
+            "Review skins as surfaces: tile skin-tile 2 x 2 for seams; preview skin-wrap on its part",
             "Bind stable image slots, then select-image per component",
         ],
         "assets": keys,
