@@ -102,7 +102,7 @@ Mount with `assets: {STYLE: {base: 'plate-base', core: 'plate-core', ...}}` ([mo
 | Role | Ask for | `aspect_ratio` |
 |---|---|---|
 | `skin-tile` | Seamless in both directions, one motif family, no focal point; light marks on pure black (or real alpha) so one image can be keyed and tinted to any palette | `1:1` |
-| `skin-wrap` | A panorama with the composition spread across the width, large simple shapes, a calm top edge that may be cropped; no text | The platform ratio closest to and wider than the wrapped span, usually `16:9`; the wrap crops the rest |
+| `skin-wrap` | A panorama with the composition spread across the width, large simple shapes, a calm top edge that may be cropped; no text | The provider's ratio closest to the wrapped span. `dox doctor` lists the provider's ratios; the ChatGPT provider offers `1:1`, `2:3` and `3:2`, so a box wrap uses `3:2` and crops the top |
 
 Derive the motif from the subject, never from the samples. Review it as a surface: tile it 2 × 2 and look for seams and repeating blotches, and preview it on the part at the size it will be seen. Select it into an image slot and pass that slot's id as `skin.image` ([skins](./stage.md#skins)). The [sample skins](./../samples/stage/skins/README.md) record their prompts and processing.
 
