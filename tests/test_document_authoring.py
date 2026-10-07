@@ -1,11 +1,12 @@
 import base64
 import json
+import re
 
 import pytest
 
-from doxagon.renderings.document_assets import plan_adopt_bundle, plan_bind_slots, plan_select_image
+from doxagon.renderings.document_assets import plan_add_slots, plan_adopt_bundle, plan_bind_slots, plan_select_image
 from doxagon.renderings.document_changes import apply_plan, plan_text_change
-from doxagon.renderings.document_images import ImageDocument, encode_variant, replace_slots
+from doxagon.renderings.document_images import ImageDocument, add_slots, encode_variant, replace_slots
 from doxagon.renderings.document_inspection import inspect_document, sha
 from doxagon.renderings.project import DocumentWorkspaceError, resolve_document_project
 from tests.authored_vault import write_authored_project
@@ -132,3 +133,57 @@ def test_adoption_refuses_cycle_and_changed_source_between_plan_apply(project):
     with pytest.raises(DocumentWorkspaceError) as error:
         plan_adopt_bundle(inspect_document(project), 'plate', source)
     assert error.value.code == 'DOCUMENT_STYLE_CYCLE'
+
+
+def adopted_variant(project):
+    source = legacy(project)
+    apply_plan(project, plan_adopt_bundle(inspect_document(project), 'plate', source))
+    view = inspect_document(project)
+    return view, view.summary['authoring']['assets'][0]['variants'][0]['id']
+
+
+def test_add_slots_inserts_new_stable_slots_with_selection_receipts(project):
+    view, variant = adopted_variant(project)
+    apply_plan(project, plan_text_change(view, [{'item': view.summary['document']['id'], 'before': '</body>', 'after': '<div id="textures" hidden></div></body>'}]))
+    before = ImageDocument(project.path('outputs/document/observatory.html').read_bytes())
+    slots = [{'id': 'tex-paper', 'key': 'plate', 'variant': variant}, {'id': 'tex-copy', 'alt': 'Copy', 'key': 'plate', 'variant': variant}]
+    plan = plan_add_slots(inspect_document(project), 'textures', slots)
+    apply_plan(project, plan)
+    after = ImageDocument(project.path('outputs/document/observatory.html').read_bytes())
+    registry = json.loads(project.path('outputs/document/authoring.json').read_bytes())
+    container = next(element for element in after.elements if element.attrs.get('id') == 'textures')
+    fresh = {slot.attrs['id']: after.digest(slot) for slot in after.slots if slot.inside(container)}
+    assert fresh == {name: registry['usages'][name]['embedded_sha256'] for name in ('tex-paper', 'tex-copy')}
+    assert [(s.attrs.get('id'), before.digest(s)) for s in before.slots] == [(s.attrs.get('id'), after.digest(s)) for s in after.slots if not s.inside(container)]
+    assert {registry['usages'][name]['provenance'] for name in fresh} == {'encoded_variant'}
+    assert registry['assets']['plate']['selected'] == variant
+    assert len(plan['details']['encodings']) == 1
+
+
+def test_add_slots_refuses_used_or_invalid_ids_unknown_containers_and_variants(project):
+    view, variant = adopted_variant(project)
+    def slot(identity, chosen=variant):
+        return {'id': identity, 'key': 'plate', 'variant': chosen}
+    for container, slots in [('missing', [slot('tex-a')]), ('plates', [slot('slot-0')]), ('plates', [slot('9bad')]),
+                             ('plates', [slot('tex-a'), slot('tex-a')]), ('plates', [slot('tex-a', 'unknown')]), ('plates', [])]:
+        with pytest.raises(DocumentWorkspaceError):
+            plan_add_slots(view, container, slots)
+    encoded, _ = encode_variant(png((7, 8, 9)))
+    with pytest.raises(DocumentWorkspaceError):
+        add_slots(streaming(), 'dox-asset-payloads', [{'id': 'tex-a', 'encoded': encoded}])
+
+
+def test_text_patch_may_carry_unchanged_payloads_but_never_changes_them(project):
+    view = inspect_document(project)
+    item, html = view.summary['document']['id'], project.path('outputs/document/observatory.html')
+    text = html.read_text()
+    apply_plan(project, plan_text_change(view, [{'item': item, 'before': text, 'after': text.replace('Dawn', 'Daybreak')}]))
+    assert 'Daybreak' in html.read_text()
+    view, text = inspect_document(project), html.read_text()
+    other = 'data:image/png;base64,' + base64.b64encode(png((9, 9, 9))).decode()
+    first = re.search(r'data:image/png;base64,[A-Za-z0-9+/=]+', text)[0]
+    for before, after in [(text, text.replace(first, other, 1)), ('</body>', f'<img id="extra" alt="" src="{other}"></body>'),
+                          ('</body>', f'<div style="background:url({other})"></div></body>')]:
+        with pytest.raises(DocumentWorkspaceError) as refused:
+            plan_text_change(view, [{'item': item, 'before': before, 'after': after}])
+        assert refused.value.code == 'DOCUMENT_PATCH_UNSUPPORTED'

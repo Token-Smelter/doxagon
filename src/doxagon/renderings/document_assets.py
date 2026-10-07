@@ -7,7 +7,7 @@ import re
 import yaml
 
 from .document_changes import REGISTRY_PATH, json_bytes, make_plan, registry
-from .document_images import adopt_slots, encode_variant, replace_slots
+from .document_images import add_slots, adopt_slots, encode_variant, replace_slots
 from .document_inspection import Inspection, sha
 from .project import DocumentWorkspaceError
 
@@ -330,3 +330,45 @@ def plan_select_image(view: Inspection, key: str, variant: str, slots: list[str]
     record['validation'] = None
     return make_plan(view, {relative(view, view.summary['document']['path']): html, REGISTRY_PATH: json_bytes(record)}, operation='select-image',
                      details={'asset': key, 'variant': variant, 'slots': slots, 'previous_payloads': expected, 'encoding': receipt})
+
+
+def plan_add_slots(view: Inspection, container: str, slots: list[dict], *, quality: int = 88) -> dict:
+    """Insert new stable slots filled from registered variants, recording the same encoding receipts as select-image."""
+    record = registry(view)
+    if not isinstance(container, str) or not container or not isinstance(slots, list) or not 1 <= len(slots) <= 200:
+        raise DocumentWorkspaceError('DOCUMENT_USAGE_INVALID', 'Name an existing container id and 1..200 new slots')
+    encodings: dict[tuple[str, str], tuple[bytes, str, dict]] = {}
+    added = []
+    for slot in slots:
+        if not isinstance(slot, dict) or not isinstance(slot.get('id'), str) or not isinstance(slot.get('alt', ''), str):
+            raise DocumentWorkspaceError('DOCUMENT_USAGE_INVALID', 'Each new slot needs an id, a key, a variant and optional alt text')
+        identity, key, variant = slot['id'], slot.get('key'), slot.get('variant')
+        if identity in record['usages']:
+            raise DocumentWorkspaceError('DOCUMENT_USAGE_INVALID', f'Slot {identity} already has a recorded usage')
+        asset = record['assets'].get(key)
+        candidate = asset.get('variants', {}).get(variant) if asset else None
+        if not candidate:
+            raise DocumentWorkspaceError('DOCUMENT_VARIANT_UNKNOWN', f'Choose a registered variant for {identity}')
+        if (key, variant) not in encodings:
+            raw = required(view, relative(view, candidate['path']))
+            if sha(raw) != candidate['sha256']:
+                raise DocumentWorkspaceError('DOCUMENT_VARIANT_DRIFT', 'Original variant bytes changed')
+            encoded, receipt = encode_variant(raw, quality=quality)
+            receipt_id = 'encoding-' + sha(json_bytes(receipt))
+            asset.setdefault('encodings', {})[receipt_id] = receipt
+            encodings[(key, variant)] = (encoded, receipt_id, receipt)
+        encoded, receipt_id, _ = encodings[(key, variant)]
+        added.append({'id': identity, 'alt': slot.get('alt', ''), 'encoded': encoded})
+        record['usages'][identity] = {'asset': key, 'variant': variant, 'encoding': receipt_id,
+                                      'embedded_sha256': sha(encoded), 'provenance': 'encoded_variant'}
+    html = add_slots(view.contents[view.summary['document']['id']], container, added)
+    for key in {key for key, _ in encodings}:
+        variants = {usage.get('variant') for usage in record['usages'].values() if usage.get('asset') == key}
+        if len(variants) == 1 and None not in variants:
+            record['assets'][key]['selected'] = variants.pop()
+    record['validation'] = None
+    return make_plan(view, {relative(view, view.summary['document']['path']): html, REGISTRY_PATH: json_bytes(record)}, operation='add-slots',
+                     details={'container': container,
+                              'slots': [{'id': s['id'], 'asset': record['usages'][s['id']]['asset'], 'variant': record['usages'][s['id']]['variant'],
+                                         'encoding': record['usages'][s['id']]['encoding']} for s in added],
+                              'encodings': {receipt_id: receipt for _, receipt_id, receipt in encodings.values()}})

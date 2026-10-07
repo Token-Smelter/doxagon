@@ -164,6 +164,10 @@ def asset_plan(project, snapshot, request, output):
     {operation:admit-image, key, item (inspection item id)}.
     Bind: {operation:bind-slots, associations:{slot:asset}}.
     Select: {operation:select-image, key, variant, slots:[slot], quality:88}.
+    Add slots: {operation:add-slots, container, slots:[{id, alt, key, variant}],
+    quality:88} appends new stable <img id> slots inside the existing element
+    whose id is container, filled from registered variants with select-image's
+    encoding receipts. Add the container itself with an ordinary text patch.
     Inspect the written plan, then use document apply.
 
     Admit-image registers artwork you already have as a variant of an asset
@@ -189,7 +193,7 @@ def asset_plan(project, snapshot, request, output):
     image elements that lack one. data-slot on a figure is a document's own CSS
     convention and produces no stable slot. See docs/document-authoring.md.
     """
-    from .document_assets import plan_admit_image, plan_create_asset, plan_adopt_bundle, plan_bind_slots, plan_select_image
+    from .document_assets import plan_add_slots, plan_admit_image, plan_create_asset, plan_adopt_bundle, plan_bind_slots, plan_select_image
     try:
         view = inspect_document(resolve_document_project(project), snapshot)
         value = read_json(request)
@@ -204,6 +208,8 @@ def asset_plan(project, snapshot, request, output):
             result = plan_bind_slots(view, value['associations'])
         elif operation == 'select-image':
             result = plan_select_image(view, value['key'], value['variant'], value['slots'], quality=value.get('quality', 88))
+        elif operation == 'add-slots':
+            result = plan_add_slots(view, value['container'], value['slots'], quality=value.get('quality', 88))
         else:
             raise click.UsageError('Unknown asset operation; see asset-plan --help')
         write_plan(result, output)

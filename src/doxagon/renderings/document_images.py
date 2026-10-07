@@ -182,6 +182,58 @@ def encode_variant(raw: bytes, *, quality: int = 88) -> tuple[bytes, dict]:
         refuse(f'Unsupported original raster: {error}')
 
 
+SLOT_ID = re.compile(r'[A-Za-z][A-Za-z0-9_-]{0,127}')
+DATA_IMAGE = re.compile(r'data:image/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=\s]*')
+
+
+def add_slots(raw: bytes, container: str, slots: list[dict]) -> bytes:
+    """Append new stable slots, each with its own encoded bytes, inside an existing element.
+
+    The container is ordinary document structure added beforehand by a text patch; existing slots and
+    payloads must come through byte for byte, so this is the only way new image bytes enter by insertion.
+    """
+    if not slots:
+        refuse('Name at least one new slot')
+    document = ImageDocument(raw)
+    targets = [e for e in document.elements if e.attrs.get('id') == container]
+    if len(targets) != 1:
+        refuse(f'No element with id {container!r} to hold the new slots')
+    target = targets[0]
+    if target.tag in VOID or not target.closing_start:
+        refuse('The slot container must be an element with a closing tag')
+    if document.container and (target is document.container or target.inside(document.container)):
+        refuse('New slots cannot be placed in the progressive payload container')
+    used = {e.attrs['id'] for e in document.elements if e.attrs.get('id')}
+    markup, added = '', {}
+    for slot in slots:
+        identity = slot['id']
+        if not isinstance(identity, str) or not SLOT_ID.fullmatch(identity) or identity in used:
+            refuse(f'Slot id {identity!r} is invalid or already used in the document')
+        used.add(identity)
+        added[identity] = sha(slot['encoded'])
+        url = 'data:image/webp;base64,' + base64.b64encode(slot['encoded']).decode()
+        markup += '\n' + image_tag({'id': identity, 'alt': slot.get('alt', ''), 'src': url})
+    result = document.edit([(target.closing_start, target.closing_start, markup + '\n')])
+    verified = ImageDocument(result)
+    before = [(s.attrs.get('id'), document.digest(s), s.attrs) for s in document.slots]
+    after = [(s.attrs.get('id'), verified.digest(s), s.attrs) for s in verified.slots if s.attrs.get('id') not in added]
+    fresh = {s.attrs.get('id'): verified.digest(s) for s in verified.slots if s.attrs.get('id') in added}
+    if before != after or fresh != added or list(verified.payloads) != list(document.payloads):
+        refuse('Adding slots changed existing slots or payloads')
+    return result
+
+
+def payloads_preserved(before: bytes, after: bytes) -> bool:
+    """True when every slot keeps its id and bytes and no embedded image appears or disappears."""
+    try:
+        old, new = ImageDocument(before), ImageDocument(after)
+        slots = lambda doc: [(s.attrs.get('id'), doc.digest(s)) for s in doc.slots]  # noqa: E731
+        urls = lambda raw: sorted(re.sub(r'\s+', '', url) for url in DATA_IMAGE.findall(raw.decode('utf-8')))  # noqa: E731
+        return slots(old) == slots(new) and list(old.payloads) == list(new.payloads) and urls(before) == urls(after)
+    except DocumentWorkspaceError:
+        return False
+
+
 def replace_slots(raw: bytes, expected: dict[str, str], encoded: bytes) -> bytes:
     if not expected:
         refuse('Name at least one stable image slot')

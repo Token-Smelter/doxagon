@@ -9,6 +9,7 @@ import re
 from typing import Mapping
 
 from doxagon.wal import WriteAheadLog, WriterFence, RecoveryUnresolved
+from .document_images import payloads_preserved
 from .document_inspection import Inspection, barrier, inspect_document, sha, MAX_FILE, MAX_TOTAL
 from .project import DocumentProject, DocumentWorkspaceError
 
@@ -199,7 +200,10 @@ def plan_text_change(view: Inspection, patches: list[dict]) -> dict:
         text = raw.decode('utf-8')
         if text.count(before) != 1:
             raise DocumentWorkspaceError('DOCUMENT_PATCH_AMBIGUOUS', 'The exact before text must occur once in the selected file')
-        if 'data:image/' in before or 'data:image/' in after:
-            raise DocumentWorkspaceError('DOCUMENT_PATCH_UNSUPPORTED', 'Use image selection to change embedded payloads')
-        replacements[relative] = text.replace(before, after, 1).encode()
+        changed = text.replace(before, after, 1).encode()
+        # A patch may carry payload text (a whole-file rewrite, say) only if it leaves every slot's id and bytes,
+        # and every embedded image, exactly as they were; new or changed bytes go through image selection.
+        if ('data:image/' in before or 'data:image/' in after) and not (item['kind'] == 'document' and payloads_preserved(raw, changed)):
+            raise DocumentWorkspaceError('DOCUMENT_PATCH_UNSUPPORTED', 'Use image selection to change embedded payloads, and add-slots to add new ones')
+        replacements[relative] = changed
     return make_plan(view, replacements, operation='text', details={'patches': len(patches)})

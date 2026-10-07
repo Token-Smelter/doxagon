@@ -57,6 +57,9 @@ def test_documented_cli_image_style_and_cue_workflows(tmp_path, monkeypatch):
     before, after = ImageDocument(original), ImageDocument(html.read_bytes())
     assert before.digest(before.slots[0]) != after.digest(after.slots[0])
     assert before.digest(before.slots[-1]) == after.digest(after.slots[-1])
+    apply_request({'patches': [{'item': context()['document']['id'], 'before': '</body>', 'after': '<div id="textures" hidden></div></body>'}]}, text=True)
+    apply_request({'operation': 'add-slots', 'container': 'textures', 'slots': [{'id': 'tex-paper', 'alt': '', 'key': 'telescope', 'variant': job['outputs'][0]['asset_id']}]})
+    assert sum(1 for slot in ImageDocument(html.read_bytes()).slots if slot.attrs.get('id') == 'tex-paper') == 1
     run('validate', '--record')
     assert context()['authoring']['validation'] == 'current'
     from doxagon.renderings import document_validation
