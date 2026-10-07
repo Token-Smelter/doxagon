@@ -9,6 +9,9 @@ __pycache__/
 
 # Build artifacts
 /build/
+node_modules/
+.svelte-kit/
+/apps/web/frontend/build/
 theses/*/build/
 lowres-output/
 
