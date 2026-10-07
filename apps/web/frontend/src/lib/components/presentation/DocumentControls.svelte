@@ -85,7 +85,7 @@
     .cue-picker { display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 9rem; }
     details { position: relative; flex: 1; min-width: 0; max-width: 40rem; }
     summary { box-sizing: border-box; overflow-wrap: anywhere; }
-    ul { position: absolute; top: 100%; inset-inline: 0; z-index: 1; max-height: min(20rem, 50dvh); overflow-y: auto; margin: 0.25rem 0 0; padding: 0.25rem; list-style: none; border: 1px solid var(--dox-frame-rule, #71695d); border-radius: 4px; background: var(--dox-frame-surface, #282219); box-shadow: 0 8px 20px rgb(0 0 0 / 0.25); scrollbar-color: var(--dox-frame-text-muted, #b9af9d) var(--dox-frame-surface, #282219); }
+    ul { position: absolute; top: 100%; inset-inline: 0; z-index: 1; max-height: 20rem; overflow-y: auto; margin: 0.25rem 0 0; padding: 0.25rem; list-style: none; border: 1px solid var(--dox-frame-rule, #71695d); border-radius: 4px; background: var(--dox-frame-surface, #282219); box-shadow: 0 8px 20px rgb(0 0 0 / 0.25); scrollbar-color: var(--dox-frame-text-muted, #b9af9d) var(--dox-frame-surface, #282219); }
     li button { width: 100%; text-align: left; overflow-wrap: anywhere; border-color: transparent; }
     li button[aria-current="step"] { border-color: var(--dox-frame-text-muted, #b9af9d); }
     label { display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 9rem; }
