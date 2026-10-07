@@ -31,6 +31,8 @@ Write `change.json`:
 
 Each `before` must occur exactly once. To change cue identities/order, include the corresponding HTML, edition and notes patches together.
 
+A text patch never changes image bytes. It may still carry them: a whole-file rewrite of a document that already holds payloads is accepted when every image slot keeps its id and bytes and no embedded image appears, disappears or changes (`payloads_preserved`, ./src/doxagon/renderings/document_images.py). Anything else is refused as `DOCUMENT_PATCH_UNSUPPORTED`; change bytes with `select-image` and add new images with `add-slots`.
+
 The cue list that must agree with the notes is the one the **runtime** reports over the bridge, not the `data-cue` attributes in the source. A document whose bridge builds its cue list by querying the DOM collects only the elements that exist when its `<script>` runs, so a `<section data-cue="...">` inserted after that script is never reported. Source order then matches the notes exactly while the runtime list is short.
 
 `DOCUMENT_NOTES_MISMATCH` names the specific disagreement rather than only the code: differing `documentId` or `edition` values with both sides quoted, which cue ids are missing from which side, or the cue whose notes body is not a string. When a cue the notes declare was not reported and its element sits after the bridge script, the message names that placement as the cause.
@@ -109,6 +111,16 @@ dox document asset-plan --project observatory --snapshot SNAPSHOT \
   --request select.json --output select-plan.json  # {"operation":"select-image","key":"night-sky","variant":"VARIANT_ID","slots":["plate-hero"]}
 dox document apply --project observatory select-plan.json
 ```
+
+### Adding new slots
+
+A document with nowhere to put an image gains new slots with `add-slots`, not with a text patch. First add the container with an ordinary text patch, for example `<div id="textures" hidden></div>`. Then:
+
+```json
+{"operation":"add-slots","container":"textures","slots":[{"id":"tex-paper","alt":"","key":"paper","variant":"VARIANT_ID"}],"quality":88}
+```
+
+Each slot becomes `<img id alt src>` appended inside the container, filled with its variant encoded exactly as `select-image` would encode it. The registry records the same encoding receipt and an `encoded_variant` usage, so the slot is then an ordinary stable slot for later `select-image` changes. Ids must be new to the document; the container must be an existing element with a closing tag outside the progressive payload container. The plan refuses if any existing slot or payload would change.
 
 `dox document context --json` lists every `usages[]` entry with its `stable` flag; check it before writing a bind request. `bind-slots` also assigns deterministic `dox-image-N` ids to image elements that lack one (`adopt_slots`, ./src/doxagon/renderings/document_images.py:149), so a document authored without ids can still be bound — review the proposed slot map in the plan.
 

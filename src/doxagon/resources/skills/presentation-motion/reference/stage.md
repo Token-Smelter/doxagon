@@ -95,7 +95,7 @@ A new surface is a function: `DoxStageKit.defineSurface('glass', (T, options, K)
 
 ## Skins
 
-**A skin lays a document image on a part: a repeating tile or one continuous wrap.** The image is an ordinary `<img>` in the document, normally a selected image slot; name it by id. Skins apply to lit looks (`ink`, `satin`, `clay`, `gloss`, `metal`, `cel`), which put the image under their own finish: lacquer, satin or metal. Drawn looks keep their own surface.
+**A skin lays a document image on a part: a repeating tile or one continuous wrap.** The image is an ordinary `<img>` in the document, normally a selected image slot; name it by id. To give a document new slots for skins, add a hidden container with a text patch, then fill it with `dox document asset-plan` operation `add-slots`: `{operation:'add-slots', container:'textures', slots:[{id:'tex-paper', alt:'', key, variant}]}` (see `dox document asset-plan --help`). Skins apply to lit looks (`ink`, `satin`, `clay`, `gloss`, `metal`, `cel`), which put the image under their own finish: lacquer, satin or metal. Drawn looks keep their own surface.
 
 ```js
 { id: 'hull', shape: 'box', size: [1.2, 0.72, 0.62], skin: { image: 'hull-art', mode: 'wrap' } }
