@@ -155,7 +155,7 @@ Admission refuses, naming the cause: `DOCUMENT_ADMISSION_IMAGE_INVALID` when the
 
 ## Generation: candidates first
 
-The existing configured subprocess provider is selected by `DOXAGON_IMAGE_GENERATOR`. `DOXAGON_IMAGE_MODEL` optionally records its configured model identity; absent model reporting remains explicitly unknown. No credentials enter context or receipts. The executable receives the existing `--prompt-file`, `--output`, `--image-size`, `--aspect-ratio` and repeated `--source` interface. Context reports the configured executable identity/hash and supported settings.
+The subprocess provider is the adapter selected with `dox provider use` (`[image] provider` in the user config; `DOXAGON_IMAGE_GENERATOR` overrides it). `DOXAGON_IMAGE_MODEL` optionally records its configured model identity; absent model reporting remains explicitly unknown. No credentials enter context or receipts. The executable receives the existing `--prompt-file`, `--output`, `--image-size`, `--aspect-ratio` and repeated `--source` interface. Context reports the configured executable identity/hash and supported settings.
 
 ```bash
 dox document generation-plan --project observatory --snapshot SNAPSHOT --asset night-sky --variants 1 --output generation-plan.json

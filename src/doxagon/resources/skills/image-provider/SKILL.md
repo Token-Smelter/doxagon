@@ -6,10 +6,18 @@ description: Set up, verify or replace the image generator Doxagon uses for pres
 # Image provider
 
 Doxagon builds image prompts and reference bundles but contains no image
-model. It runs one executable, the **adapter**, named by
-`DOXAGON_IMAGE_GENERATOR`, under the contract in the platform's
-`docs/image-providers.md`. This skill writes and verifies that adapter. Assume
-no vendor: the user's choice decides.
+model. It runs one executable, the **adapter**, under the contract in the
+platform's `docs/image-providers.md`. This skill writes, verifies and selects
+that adapter. Assume no vendor: the user's choice decides.
+
+| What | Where |
+|---|---|
+| Adapter | `~/.doxagon/providers/<name>` |
+| Its credentials | `~/.doxagon/providers/<name>.env` |
+| The selection | `[image] provider` in `~/.config/doxagon/config.toml`, written by `dox provider use` |
+| One-off override | `DOXAGON_IMAGE_GENERATOR=<name>` |
+
+Start with `dox provider list`: the user may already have an adapter.
 
 ```mermaid
 flowchart LR
@@ -17,7 +25,7 @@ flowchart LR
   B --> C["implement generate() from current API docs"]
   C --> D["dox provider check --executable"]
   D -->|"user approves the cost"| E["dox provider check --live --yes"]
-  E --> F["export DOXAGON_IMAGE_GENERATOR=name"]
+  E --> F["dox provider use name"]
 ```
 
 ## Steps
@@ -48,9 +56,9 @@ flowchart LR
    executable bit, digest and capabilities schema. Fix anything it reports.
 6. **Verify for real, with consent.** `dox provider check --executable <name>
    --live --yes` makes one generation call, which may cost money. Ask first.
-7. **Select it:** `export DOXAGON_IMAGE_GENERATOR=<name>`; a bare name resolves
-   in `~/.doxagon/providers/` before PATH. Offer to add the line to the user's
-   shell profile. Then `dox doctor` should show `provider: ok`.
+7. **Select it:** `dox provider use <name>` runs the free check again and
+   records the choice in the user config; no shell profile edit is needed.
+   Then `dox doctor` should show `provider: ok`.
 
 To exercise the contract without any service, the template with a `generate()`
 that writes a placeholder PNG passes the free check; it is a test double, not

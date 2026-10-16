@@ -7,7 +7,7 @@ document generation contract, see [document authoring](document-authoring.md)
 and [generation details](image-generation-details.md).
 
 **Image generation is vendor-neutral.** The platform names no provider, passes
-no credentials, and invokes only the adapter `DOXAGON_IMAGE_GENERATOR` names,
+no credentials, and invokes only the adapter selected with `dox provider use`,
 under [image-providers.md](./image-providers.md). Scripts under `factory/`
 predate that seam: they are worked examples to adapt, not a supported route.
 
@@ -41,7 +41,7 @@ The visual system enables **prompt assembly** for AI image generation. Each pres
 │           ▼                                                     │
 │  ┌─────────────────────────────────────┐                        │
 │  │   Image provider adapter            │                        │
-│  │   (DOXAGON_IMAGE_GENERATOR)         │                        │
+│  │   (dox provider use NAME)           │                        │
 │  │                                     │                        │
 │  │   - Read assembled prompt           │                        │
 │  │   - Load reference images           │                        │
@@ -365,7 +365,7 @@ Main prompt assembly script.
 
 ### Image provider
 
-The platform invokes whatever `DOXAGON_IMAGE_GENERATOR` names, under the
+The platform invokes the adapter selected with `dox provider use`, under the
 contract in [image-providers.md](./image-providers.md). No model or vendor is
 built in; the `image-provider` skill writes an adapter for the service the
 user has and verifies it with `dox provider check`.
@@ -691,7 +691,7 @@ python3 factory/scripts/generate_visuals.py --presentation observatory --slide 1
 cat "$DOXAGON_ROOT/projects/observatory/outputs/presentation/slides/14-opening/images/main/outputs/assembled_prompt.md"
 
 # 4. Generate image through the configured adapter (docs/image-providers.md)
-"$DOXAGON_IMAGE_GENERATOR" \
+~/.doxagon/providers/<name> \
     --prompt-file .../outputs/assembled_prompt.md \
     --output .../outputs/ \
     --image-size 2K --aspect-ratio 16:9

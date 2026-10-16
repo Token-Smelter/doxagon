@@ -42,9 +42,9 @@ from doxagon.presentations.migration import LegacyReadAdapter, is_migrated
 # Image generation runs a user-owned adapter that implements the contract in
 # docs/image-providers.md. The platform ships no adapter and passes no credentials.
 IMAGE_GENERATOR_UNSET = (
-    "No image generator configured. Set DOXAGON_IMAGE_GENERATOR to an adapter "
-    "implementing docs/image-providers.md, installed in ~/.doxagon/providers/ "
-    "or on PATH."
+    "No image generator configured. Install an adapter implementing "
+    "docs/image-providers.md in ~/.doxagon/providers/, then run "
+    "`dox provider use <name>`."
 )
 
 

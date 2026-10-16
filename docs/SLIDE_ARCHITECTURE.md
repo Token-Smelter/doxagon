@@ -3,7 +3,7 @@
 Examples are fictional. This describes the legacy slide format; see
 [document authoring](document-authoring.md) for selected single-page documents.
 
-Image generation goes through the adapter `DOXAGON_IMAGE_GENERATOR` names,
+Image generation goes through the adapter selected with `dox provider use`,
 under [image-providers.md](./image-providers.md). The `factory/` scripts shown
 below predate that contract and are examples to adapt, not a supported route.
 
@@ -248,7 +248,7 @@ source .venv/bin/activate
 python factory/scripts/generate_visuals.py --slide 07 --image main --output
 
 # Generate image using the configured provider adapter (docs/image-providers.md)
-"$DOXAGON_IMAGE_GENERATOR" \
+~/.doxagon/providers/<name> \
     --prompt-file {outputs_dir}/assembled_prompt.md \
     --output {outputs_dir}/ \
     --image-size 4K --aspect-ratio 16:9 \

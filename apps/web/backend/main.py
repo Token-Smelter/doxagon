@@ -20,7 +20,7 @@ from apps.web.backend.routers import (
     dev_tasks,
 )
 from doxagon.config import LIBRARY_DIR, THESES_DIR
-from doxagon.presentation_backends import resolve_agent_author, resolve_image_generator
+from doxagon.presentation_backends import provider_command, resolve_agent_author, resolve_image_generator
 from doxagon.presentations.api import install_vault_presentations
 from doxagon.presentations.contracts import TOTAL_ASSET_BYTES_ENV, resolve_validation_policy
 from doxagon.presentations.exporters import PlaywrightRasterCapturer
@@ -82,7 +82,7 @@ app.include_router(dev_tasks.router, prefix="/api")
 install_vault_presentations(
     app,
     THESES_DIR,
-    generator=resolve_image_generator(os.environ.get("DOXAGON_IMAGE_GENERATOR")),
+    generator=resolve_image_generator(provider_command()),
     author=resolve_agent_author(os.environ.get("DOXAGON_AGENT_AUTHOR")),
     capturer=PlaywrightRasterCapturer(),
     policy=resolve_validation_policy(os.environ.get(TOTAL_ASSET_BYTES_ENV)),
