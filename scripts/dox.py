@@ -917,9 +917,9 @@ def graph(domain: str, root: str, depth: int):
     click.echo("```mermaid")
     click.echo("graph TD")
 
-    # Shorten IDs for readability
+    # Truncating would merge doxai that share a prefix into one Mermaid node.
     def short_id(full_id: str) -> str:
-        return full_id.replace('d-', '').replace('-', '_')[:20]
+        return full_id.removeprefix('d-').replace('-', '_')
 
     # Output nodes with labels
     for node_id, data in G.nodes(data=True):

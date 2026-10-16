@@ -10,8 +10,9 @@ of how they got there. Keep it short; this is a tour, not a manual.
 
 ## 1. Check the setup
 
-Run `dox doctor`. `entry_point`, `vault_binding`, `skills` and `agents_md` must
-pass. `provider` (image generation) and `frontend` (web UI) are needed only for
+Run `dox doctor`. `entry_point`, `vault_binding`, `skills`, `agents_md` and
+`path_shims` must pass; a failing `path_shims` names an older `dox` on PATH,
+which the user should remove (ask first). `provider` (image generation) and `frontend` (web UI) are needed only for
 presentations and the web workspace, so mention them and move on. Act on any
 `fix:` line doctor prints.
 

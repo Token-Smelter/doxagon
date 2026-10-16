@@ -114,6 +114,26 @@ def test_applied_extraction_lands_in_the_declared_knowledge_root_and_validates(v
     ) == (0, 2, 1, ["elaborates"], "processed", False, 0)
 
 
+def test_graph_keeps_full_distinct_node_ids(vault, tmp_path):
+    dox(vault, "extract", "p-cold-proofing-notes", "--response", str(answer(tmp_path)))
+    graph = dox(vault, "graph").stdout
+    assert "overnight_cold_proofing_makes_shaped_loaves[" in graph
+
+
+def test_doctor_names_the_shadowing_path_entry(tmp_path):
+    from doxagon.toolchain import doctor
+
+    old = tmp_path / "old-install/dox"
+    old.parent.mkdir()
+    old.write_text("#!/bin/sh\n")
+    old.chmod(0o755)
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin/dox").symlink_to(old)
+    current = Path(sys.executable).parent
+    report = doctor({"PATH": os.pathsep.join([str(current), str(tmp_path / "bin")])})["path_shims"]
+    assert f"{tmp_path / 'bin/dox'} -> {old}" in report.get("fix", "")
+
+
 @pytest.mark.parametrize("bad", [{"edge_type": "inspires"}, {"tag": "domain:baking"}])
 def test_invalid_candidate_is_refused_before_any_write(vault, tmp_path, bad):
     result = dox(vault, "extract", "p-cold-proofing-notes", "--response", str(answer(tmp_path, **bad)))

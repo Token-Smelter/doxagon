@@ -29,8 +29,9 @@ flowchart LR
    checkout.
 3. **Bind and check.** `export DOXAGON_ROOT=<path>`, and offer to add that line
    to the user's shell profile. Run `dox doctor` and act on every `fix:` line.
-   `entry_point`, `vault_binding`, `skills` and `agents_md` must pass;
-   `provider` and `frontend` matter only for images and the web UI.
+   `entry_point`, `vault_binding`, `skills`, `agents_md` and `path_shims` must
+   pass; `provider` and `frontend` matter only for images and the web UI. A
+   failing `path_shims` means an older `dox` on PATH: ask before removing it.
 4. **First import.** Follow
    [`dox-knowledge`](./src/doxagon/resources/skills/dox-knowledge/SKILL.md):
    ask for one to three sources, admit each with `dox phantasia add`, and

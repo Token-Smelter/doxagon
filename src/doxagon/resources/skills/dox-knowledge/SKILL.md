@@ -53,10 +53,12 @@ flowchart LR
 | Edge types come only from `knowledge/schema.yaml` `edge_types`; every rationale says *why* | unregistered types are refused |
 | `domain:` tags must be registered in `tag_prefixes.domain.values`; ask before adding one, or omit the tag | domains are controlled vocabulary |
 | `status: draft` on every new doxa | the user, not the extractor, promotes a belief to `canonical` |
+| Omit `source_url` when the source has none (personal notes, a conversation) | an empty or made-up URL reads as a citation |
 
 Scale the count to the source: a page of notes yields a handful of doxai, a
-long report dozens. On a first import, prefer 3–8 strong beliefs over
-exhaustive coverage.
+long report dozens. The prompt's "extract aggressively" is written for long
+reports; on a first import, prefer 3–8 strong beliefs over exhaustive
+coverage, and this skill wins where the two disagree.
 
 ## After writing
 
