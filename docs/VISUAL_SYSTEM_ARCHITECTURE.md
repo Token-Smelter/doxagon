@@ -40,8 +40,8 @@ The visual system enables **prompt assembly** for AI image generation. Each pres
 │           │                                                     │
 │           ▼                                                     │
 │  ┌─────────────────────────────────────┐                        │
-│  │   Gemini API                        │                        │
-│  │   (Vertex AI or API Key)            │                        │
+│  │   Image provider adapter            │                        │
+│  │   (DOXAGON_IMAGE_GENERATOR)         │                        │
 │  │                                     │                        │
 │  │   - Read assembled prompt           │                        │
 │  │   - Load reference images           │                        │
@@ -315,7 +315,7 @@ Reference images are collected from:
 1. Each style's `sources/` directory
 2. The image's own `sources/` directory
 
-**Limit:** Maximum 14 images total (Gemini API quota). Excess images are truncated with a warning.
+**Limit:** Maximum 14 images total (the provider contract's reference limit). Excess images are truncated with a warning.
 
 ### Output Files
 
@@ -363,24 +363,12 @@ Main prompt assembly script.
 (prompt_text: str, reference_images: list[Path], generation_config: dict)
 ```
 
-### `factory/scripts/generate_image_vertex.py`
+### Image provider
 
-**Example adapter, not a supported path.** The platform invokes whatever
-`DOXAGON_IMAGE_GENERATOR` names, under the contract in
-[image-providers.md](./image-providers.md). This script predates that seam and
-implements only part of it. Copy it to `~/.doxagon/providers/` and point it at
-your own Vertex AI project via `GOOGLE_CLOUD_PROJECT`.
-
-```python
-def generate_image(prompt: str, output_dir: Path) -> Path | None:
-    client = genai.Client(vertexai=True, project=project_id, location=LOCATION)
-    response = client.models.generate_content(
-        model="gemini-3-pro-image-preview",
-        contents=[types.Part.from_text(text=prompt)],
-        config=types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"])
-    )
-    # Extract and save image from response
-```
+The platform invokes whatever `DOXAGON_IMAGE_GENERATOR` names, under the
+contract in [image-providers.md](./image-providers.md). No model or vendor is
+built in; the `image-provider` skill writes an adapter for the service the
+user has and verifies it with `dox provider check`.
 
 ---
 
@@ -393,7 +381,7 @@ def generate_image(prompt: str, output_dir: Path) -> Path | None:
 **Workflow:**
 1. Run `generate_visuals.py --slide N --output` to assemble prompt
 2. Read `assembled_prompt.md` and `generation_config.json`
-3. Call Vertex AI with prompt + reference images
+3. Call the configured image provider with prompt + reference images
 4. Archive prompt alongside generated image
 5. Optionally update `slide.md` to select the image
 
@@ -429,19 +417,10 @@ def generate_image(prompt: str, output_dir: Path) -> Path | None:
 - `goal.md` — Brainstorming objective
 - `context.md` — Full context for ideation
 
-### `gemini-image-api`
+### `image-provider`
 
-**Purpose:** Direct image generation with API key.
-
-**Two modes:**
-1. **Direct prompt → image:** `--prompt "description"`
-2. **Auto-prompt from content:** `--content "concept" --auto-prompt --style diagram`
-
-**Reference images:**
-```bash
---ref style_guide.png="Diagram style guide"
---ref astronomer.png="Fictional astronomer reference"
-```
+**Purpose:** Set up and verify the image provider adapter for whatever
+service the user has. No vendor is assumed.
 
 ### Skill Cross-References
 
@@ -883,7 +862,7 @@ With inline tags, `[TITLE_TREATMENT]` in the instruction links to `**Tag:** [TIT
 
 ### Why Reference Images?
 
-Gemini supports "style transfer" via reference images. Each style's `sources/` directory contains **exemplar images** that demonstrate the style. These maintain visual consistency across slides.
+Image models that accept reference images can transfer style from them. Each style's `sources/` directory contains **exemplar images** that demonstrate the style. These maintain visual consistency across slides.
 
 ### Why `<rendered_text>` Blocks?
 
@@ -891,4 +870,4 @@ Without explicit boundaries, models tend to render descriptive text as visible l
 
 ### Why Maximum 14 Reference Images?
 
-Gemini API quota limit. The assembly script enforces this by truncating excess images with a warning.
+The provider contract caps references at 14 (`max_references` in `docs/image-providers.md`). The assembly script enforces this by truncating excess images with a warning.

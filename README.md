@@ -57,9 +57,9 @@ dox init ~/doxagon-vault
 export DOXAGON_ROOT=~/doxagon-vault
 dox doctor
 
-# first import: your agent is the extractor
+# first import: your agent judges; dox gathers data and validates
 dox phantasia add notes.md
-dox extract p-notes --prompt > prompt.md     # agent writes answer.md
+dox extract p-notes --context > context.json   # agent writes answer.md
 dox extract p-notes --response answer.md --dry-run
 dox extract p-notes --response answer.md
 

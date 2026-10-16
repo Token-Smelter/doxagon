@@ -12,9 +12,10 @@ of how they got there. Keep it short; this is a tour, not a manual.
 
 Run `dox doctor`. `entry_point`, `vault_binding`, `skills`, `agents_md` and
 `path_shims` must pass; a failing `path_shims` names an older `dox` on PATH,
-which the user should remove (ask first). `provider` (image generation) and `frontend` (web UI) are needed only for
-presentations and the web workspace, so mention them and move on. Act on any
-`fix:` line doctor prints.
+which the user should remove (ask first). `provider` (image generation) and
+`frontend` (web UI) are needed only for presentations and the web workspace,
+so mention them and move on; the `image-provider` skill sets up images later.
+Act on any `fix:` line doctor prints.
 
 ## 2. First import
 

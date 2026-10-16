@@ -190,37 +190,3 @@ def archive_phantasia(slug: str):
     _save_phantasia(slug, metadata, content)
     invalidate_cache()
     return {"slug": slug, "status": "archived"}
-
-
-@router.post("/{slug}/extract")
-def extract_from_phantasia_endpoint(slug: str, focus: Optional[str] = None):
-    """Extract doxai and evidence from a phantasia using Gemini.
-
-    This runs the full extraction pipeline:
-    1. Loads the phantasia content (following source file references)
-    2. Calls Gemini for extraction
-    3. Validates and deduplicates against existing beliefs
-    4. Writes new doxai, evidence, and edges
-    5. Updates the phantasia status to 'processed'
-    """
-    from doxagon.extract import extract_from_phantasia
-
-    # Ensure slug has p- prefix
-    if not slug.startswith("p-"):
-        slug = f"p-{slug}"
-
-    try:
-        result = extract_from_phantasia(slug, focus=focus)
-        return {
-            "slug": slug,
-            "status": "extracted",
-            "created_doxai": result.get("created_doxai", []),
-            "created_evidence": result.get("created_evidence", []),
-            "created_edges": len(result.get("created_edges", [])),
-            "skipped_duplicates": len(result.get("skipped", [])),
-            "suggested_links": len(result.get("suggested_links", [])),
-        }
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")

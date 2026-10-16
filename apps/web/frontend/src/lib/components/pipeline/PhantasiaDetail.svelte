@@ -1,11 +1,7 @@
 <script lang="ts">
   import { selectedPhantasia } from "../../stores/pipeline";
-  import {
-    fetchPhantasia,
-    extractPhantasia,
-    archivePhantasia,
-  } from "../../api";
-  import type { PhantasiaDetail, ExtractionResult } from "../../api";
+  import { fetchPhantasia, archivePhantasia } from "../../api";
+  import type { PhantasiaDetail } from "../../api";
   import { createEventDispatcher } from "svelte";
   import SvelteMarkdown from "svelte-markdown";
 
@@ -16,13 +12,10 @@
   let phantasia: PhantasiaDetail | null = null;
   let loading = true;
   let error: string | null = null;
-  let extracting = false;
-  let extractionResult: ExtractionResult | null = null;
   $: if ($selectedPhantasia) loadPhantasia($selectedPhantasia);
-  async function loadPhantasia(slug: string, resetExtraction = true) {
+  async function loadPhantasia(slug: string) {
     loading = true;
     error = null;
-    if (resetExtraction) extractionResult = null;
     try {
       phantasia = await fetchPhantasia(slug);
     } catch {
@@ -30,21 +23,6 @@
       phantasia = null;
     } finally {
       loading = false;
-    }
-  }
-  async function handleExtract() {
-    if (!phantasia) return;
-    extracting = true;
-    error = null;
-    extractionResult = null;
-    try {
-      extractionResult = await extractPhantasia(phantasia.slug);
-      await loadPhantasia(phantasia.slug, false);
-      dispatch("extracted", { slug: phantasia.slug });
-    } catch (e) {
-      error = e instanceof Error ? e.message : "Extraction failed";
-    } finally {
-      extracting = false;
     }
   }
   async function handleArchive() {
@@ -106,20 +84,13 @@
     <div class="content"><SvelteMarkdown source={phantasia.content} /></div>
     <section class="extractions-section" aria-labelledby="artifacts-heading">
       <h3 id="artifacts-heading">Extracted artifacts</h3>
-      {#if extractionResult}<div class="extraction-result" role="status">
-          <span class="result-item success"
-            ><strong>{extractionResult.created_doxai.length}</strong>doxai
-            created</span
-          ><span class="result-item success"
-            ><strong>{extractionResult.created_evidence.length}</strong>evidence
-            created</span
-          ><span class="result-item"
-            ><strong>{extractionResult.created_edges}</strong>edges created</span
-          ><span class="result-item muted"
-            ><strong>{extractionResult.skipped_duplicates}</strong>duplicates
-            skipped</span
+      {#if phantasia.status !== "processed" && phantasia.status !== "archived"}<p
+          class="agent-hint"
+        >
+          Extract with your agent: <code
+            >dox extract {phantasia.slug} --context</code
           >
-        </div>{/if}
+        </p>{/if}
       <div class="extraction-lists">
         <div class="extraction-group">
           <h4>Doxai ({phantasia.extracted_doxai.length})</h4>
@@ -140,12 +111,7 @@
       </div>
     </section>
     <div class="actions">
-      {#if phantasia.status !== "processed" && phantasia.status !== "archived"}<button
-          class="extract-btn"
-          on:click={handleExtract}
-          disabled={extracting}
-          >{extracting ? "Extracting…" : "Extract doxai"}</button
-        >{/if}{#if phantasia.status !== "archived"}<button
+      {#if phantasia.status !== "archived"}<button
           class="archive-btn"
           on:click={handleArchive}>Archive phantasia</button
         >{/if}
@@ -342,37 +308,15 @@
     border-top: 1px solid var(--dox-rule);
     padding-top: 1rem;
   }
-  .extraction-result {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-    padding: 0.75rem;
-    border: 1px solid var(--dox-status-output);
-    border-radius: var(--dox-radius-sm);
-    background: color-mix(
-      in srgb,
-      var(--dox-status-output) 12%,
-      var(--dox-surface)
-    );
-  }
-  .result-item {
-    display: flex;
-    flex-direction: column;
-    min-width: 5rem;
+  .agent-hint {
+    margin: 0 0 1rem;
     color: var(--dox-text-secondary);
-    font: 0.63rem var(--dox-font-mono);
-    text-transform: uppercase;
+    font-size: 0.84rem;
   }
-  .result-item strong {
+  .agent-hint code {
+    font-family: var(--dox-font-mono);
     color: var(--dox-text-primary);
-    font: 600 1.2rem var(--dox-font-display);
-  }
-  .result-item.success {
-    border-bottom: 2px solid var(--dox-status-output);
-  }
-  .result-item.muted {
-    color: var(--dox-text-muted);
+    overflow-wrap: anywhere;
   }
   .extraction-lists {
     display: grid;
@@ -408,22 +352,12 @@
     gap: 0.75rem;
     margin-top: 1rem;
   }
-  .extract-btn,
   .archive-btn {
     min-height: 38px;
     padding: 0.5rem 1rem;
     border-radius: var(--dox-radius-sm);
     cursor: pointer;
     font: 600 0.8rem var(--dox-font-mono);
-  }
-  .extract-btn {
-    background: var(--dox-status-running);
-    border: 1px solid var(--dox-status-running);
-    color: var(--dox-text-on-running);
-  }
-  .extract-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
   }
   .archive-btn {
     background: transparent;
@@ -435,7 +369,6 @@
   }
   @media (max-width: 768px) {
     .close-btn,
-    .extract-btn,
     .archive-btn {
       min-height: var(--touch-target-min);
     }

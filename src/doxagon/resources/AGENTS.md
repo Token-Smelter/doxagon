@@ -96,15 +96,18 @@ dox path <source> <target>        # directed by default
 dox tree <belief> [--depth N]
 dox capture "<belief statement>"  # new draft belief
 dox phantasia add <file>          # admit a source; then extract it
-dox extract <p-slug> --prompt     # you are the extractor: read, answer, then
-dox extract <p-slug> --response <answer> [--dry-run]
+dox extract <p-slug> --context    # JSON for you to judge; then --response
+dox integrate --context           # clusters; find missing edges, then --response
+dox audit --context               # edges to confirm or correct, then --response
 dox link <source> <target> <edge_type> [--alias LABEL]
 dox unlink <source> <target> <edge_type>
 dox validate                      # integrity codes; run before you finish
 ```
 
-Invoke the `dox-knowledge` skill to import and extract a source, and
-`doxagon-onboarding` for a first-run walkthrough or when the vault has no doxai.
+`dox` calls no model: you judge, `--response FILE [--dry-run]` validates and
+writes. Invoke the `dox-knowledge` skill for extract, integrate and audit,
+`image-provider` to set up image generation, and `doxagon-onboarding` for a
+first-run walkthrough or when the vault has no doxai.
 
 ## 4. Style bundles
 

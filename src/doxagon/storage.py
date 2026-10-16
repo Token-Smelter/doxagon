@@ -58,6 +58,35 @@ def _schema_values(schema_file: Path) -> set[str]:
     return set(schema.get("edge_types", {}))
 
 
+def check_logos(
+    data: dict[str, Any],
+    *,
+    pending_doxai: set[str] = frozenset(),
+    doxai_dir: Path | None = None,
+    schema_file: Path | None = None,
+) -> ValidationReport:
+    """Validate a candidate logos without writing it.
+
+    `pending_doxai` names doxai that a caller will write alongside the edges,
+    so a whole change can be validated before any of it lands.
+    """
+    nodes_path = doxai_dir or DOXAI_DIR
+    schema_path = schema_file or SCHEMA_FILE
+    edges = data.get("edges") if isinstance(data, dict) else None
+    if not isinstance(edges, list):
+        return ValidationReport([ValidationIssue("malformed_logos", "logos.yaml must contain an edges list")])
+    if not schema_path.exists():
+        return ValidationReport([ValidationIssue("schema_missing", f"{schema_path} is missing")])
+
+    doxa_ids = {
+        item.stem
+        for item in nodes_path.glob("**/*.md")
+        if item.stem.upper() != "README"
+    } if nodes_path.exists() else set()
+    return validate_edge_records(edges, doxa_ids=doxa_ids | set(pending_doxai),
+                                 valid_edge_types=_schema_values(schema_path))
+
+
 def write_logos(
     data: dict[str, Any],
     *,
@@ -67,20 +96,7 @@ def write_logos(
 ) -> None:
     """Validate and atomically replace logos.yaml."""
     logos_path = path or LOGOS_FILE
-    nodes_path = doxai_dir or DOXAI_DIR
-    schema_path = schema_file or SCHEMA_FILE
-    edges = data.get("edges") if isinstance(data, dict) else None
-    if not isinstance(edges, list):
-        raise GraphIntegrityError(
-            ValidationReport([ValidationIssue("malformed_logos", "logos.yaml must contain an edges list")])
-        )
-
-    doxa_ids = {
-        item.stem
-        for item in nodes_path.glob("**/*.md")
-        if item.stem.upper() != "README"
-    } if nodes_path.exists() else set()
-    report = validate_edge_records(edges, doxa_ids=doxa_ids, valid_edge_types=_schema_values(schema_path))
+    report = check_logos(data, doxai_dir=doxai_dir, schema_file=schema_file)
     if not report.valid:
         raise GraphIntegrityError(report)
 

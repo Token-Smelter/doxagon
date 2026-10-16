@@ -13,7 +13,6 @@ Schema is defined in library/schema.yaml
 import json
 import os
 import re
-import subprocess
 import sys
 import html
 import hashlib
@@ -35,12 +34,11 @@ from doxagon.graph import (
 )
 from doxagon.storage import read_logos
 from doxagon.validation import GraphIntegrityError, validate_library
-from doxagon.prompts import load_prompt
 from doxagon.schema import load_schema
-from doxagon.extract import apply_extraction, extract_from_phantasia, extraction_prompt
+from doxagon.extract import apply_extraction, extraction_context
 from doxagon.phantasia import CHANNELS as PHANTASIA_CHANNELS, add_phantasia, list_phantasiai
-from doxagon.integrate import run_integration
-from doxagon.audit import run_audit
+from doxagon.integrate import apply_integration, integration_context, integration_overview
+from doxagon.audit import apply_audit, audit_context
 from doxagon.onboarding import remediation_for
 from doxagon.workspace import (
     WorkspaceOpenRequest,
@@ -1705,119 +1703,6 @@ def diegesis_evidence(name: str, missing_only: bool):
             click.echo("    Research: Find empirical studies, expert quotes, or case studies")
 
 
-def call_gemini(prompt: str, model: str = "gemini-2.5-pro") -> str:
-    """Call gemini CLI with a prompt and return the response."""
-    result = subprocess.run(
-        ["gemini", "-m", model, prompt],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Gemini CLI error: {result.stderr}")
-    return result.stdout.strip()
-
-
-def get_existing_beliefs() -> list[dict]:
-    """Load all existing doxai beliefs for comparison."""
-    beliefs = []
-    for f in DOXAI_DIR.glob("d-*.md"):
-        try:
-            post = frontmatter.load(f)
-            belief = post.get("belief", "")
-            if belief:
-                beliefs.append({
-                    "slug": f.stem,
-                    "belief": belief,
-                })
-        except Exception:
-            continue
-    return beliefs
-
-
-@cli.command()
-@click.argument('candidate')
-@click.option('--json', 'as_json', is_flag=True, help='Output as JSON')
-def dedup(candidate: str, as_json: bool):
-    """Check if a belief is semantically unique or duplicates an existing doxa.
-
-    Uses Gemini to compare the candidate belief against all existing beliefs.
-
-    Returns one of:
-      UNIQUE - No semantic duplicate found
-      DUPLICATE:<slug> - Semantically equivalent to existing doxa
-      RELATED:<slug> - Different but closely related (consider linking)
-
-    Examples:
-      dox dedup "AI will transform software development"
-      dox dedup "Machine learning is changing how we write code" --json
-    """
-    existing = get_existing_beliefs()
-
-    if not existing:
-        if as_json:
-            click.echo(json.dumps({"result": "UNIQUE", "reason": "No existing doxai"}))
-        else:
-            click.echo("UNIQUE (no existing doxai to compare)")
-        return
-
-    # Build the comparison prompt
-    beliefs_list = "\n".join(
-        f"- {b['slug']}: \"{b['belief']}\""
-        for b in existing
-    )
-
-    prompt = load_prompt("dedup", candidate=candidate, beliefs_list=beliefs_list)
-
-    try:
-        response = call_gemini(prompt)
-        # Parse the response - get the last non-empty line (skip gemini startup messages)
-        lines = [line.strip() for line in response.split('\n') if line.strip()]
-        result_line = lines[-1] if lines else ""
-
-        # Parse result
-        parts = result_line.split('|')
-        result_type = parts[0].upper() if parts else "ERROR"
-
-        if as_json:
-            output = {"result": result_type}
-            if result_type == "UNIQUE":
-                output["reason"] = parts[1] if len(parts) > 1 else ""
-            elif result_type in ("DUPLICATE", "RELATED"):
-                output["slug"] = parts[1] if len(parts) > 1 else ""
-                output["reason"] = parts[2] if len(parts) > 2 else ""
-            else:
-                output["raw"] = result_line
-            click.echo(json.dumps(output))
-        else:
-            if result_type == "UNIQUE":
-                click.echo(f"UNIQUE: {parts[1] if len(parts) > 1 else 'No match found'}")
-            elif result_type == "DUPLICATE":
-                slug = parts[1] if len(parts) > 1 else "?"
-                reason = parts[2] if len(parts) > 2 else ""
-                click.echo(f"DUPLICATE: {slug}")
-                if reason:
-                    click.echo(f"  Reason: {reason}")
-                click.echo(f"\n  Consider using existing doxa: dox show {slug}")
-            elif result_type == "RELATED":
-                slug = parts[1] if len(parts) > 1 else "?"
-                reason = parts[2] if len(parts) > 2 else ""
-                click.echo(f"RELATED: {slug}")
-                if reason:
-                    click.echo(f"  Reason: {reason}")
-                click.echo(f"\n  Consider linking after creation: dox link <new> {slug} <type>")
-            else:
-                click.echo(f"Unexpected response: {result_line}", err=True)
-                sys.exit(1)
-
-    except subprocess.TimeoutExpired:
-        click.echo("ERROR: Gemini request timed out", err=True)
-        sys.exit(1)
-    except Exception as e:
-        click.echo(f"ERROR: {e}", err=True)
-        sys.exit(1)
-
-
 @cli.group()
 def phantasia():
     """Admit sources into the vault: the first stage of the pipeline."""
@@ -1840,7 +1725,7 @@ def phantasia_add(path: Path, title: str | None, source: str | None, channel: st
     except ValueError as error:
         raise click.ClickException(str(error))
     click.echo(f"Created {slug}")
-    click.echo(f"  next: dox extract {slug} --prompt")
+    click.echo(f"  next: dox extract {slug} --context")
 
 
 @phantasia.command('list')
@@ -1857,332 +1742,143 @@ def phantasia_list(as_json: bool):
         click.echo(f"{entry['slug']}  [{entry['status']}]  {entry['title']}")
 
 
+def _emit_context(value: dict) -> None:
+    click.echo(json.dumps(value, indent=2, ensure_ascii=False, default=str))
+
+
+def _refuse(error: GraphIntegrityError) -> None:
+    click.echo("ERROR: nothing was written; the candidate graph is invalid:", err=True)
+    for issue in error.report.errors:
+        click.echo(f"  ! {issue.code}: {issue.message}", err=True)
+    sys.exit(1)
+
+
+def _one_mode(context: bool, response: Path | None) -> None:
+    if context == (response is not None):
+        raise click.UsageError('choose exactly one of --context or --response FILE')
+
+
+_RESPONSE = click.option('--response', 'response_file', type=click.Path(exists=True, dir_okay=False, path_type=Path),
+                         help='Validate and apply an answer written to the format the skill documents')
+_DRY_RUN = click.option('--dry-run', is_flag=True, help='With --response: validate, report, write nothing')
+
+
 @cli.command()
 @click.argument('phantasia_slug')
-@click.option('--focus', help='Focus areas to emphasize during extraction')
-@click.option('--instructions', help='Additional custom instructions')
-@click.option('--dry-run', is_flag=True, help='Validate without writing files')
-@click.option('--prompt', 'show_prompt', is_flag=True, help='Print the extraction prompt for your agent to answer')
-@click.option('--response', 'response_file', type=click.Path(exists=True, dir_okay=False, path_type=Path),
-              help="Validate and apply your agent's answer to --prompt ('-' is not accepted)")
-@click.option('--gemini', is_flag=True, help='Have the Gemini CLI answer instead (requires `gemini` on PATH)')
-def extract(phantasia_slug: str, focus: str, instructions: str, dry_run: bool,
-            show_prompt: bool, response_file: Path | None, gemini: bool):
+@click.option('--context', is_flag=True, help='Print the source and the graph it must fit into, as JSON')
+@_RESPONSE
+@_DRY_RUN
+def extract(phantasia_slug: str, context: bool, response_file: Path | None, dry_run: bool):
     """Extract doxai, evidence and edges from a phantasia.
 
-    The extractor is your own agent. Choose exactly one mode:
+    dox gathers data and validates; your agent judges, following the
+    dox-knowledge skill.
 
     \b
-      --prompt          print the prompt: source, existing beliefs, output format
-      --response FILE   validate the answer and write doxai, evidence and edges
-      --gemini          let the Gemini CLI answer (chunked, with `dox dedup`)
+      --context         the source, existing beliefs, edge types and domains
+      --response FILE   validate the answer, then write doxai, evidence, edges
 
-    The whole candidate graph is validated before anything is written, so run
-    --response with --dry-run first, fix what it reports, then apply.
+    The whole candidate graph is validated before anything is written.
 
     \b
     Examples:
-      dox extract p-my-source --prompt > prompt.md
+      dox extract p-my-source --context > context.json
       dox extract p-my-source --response answer.md --dry-run
       dox extract p-my-source --response answer.md
     """
-    if sum((show_prompt, response_file is not None, gemini)) != 1:
-        raise click.UsageError('choose exactly one of --prompt, --response FILE or --gemini')
-    if show_prompt:
-        try:
-            click.echo(extraction_prompt(phantasia_slug, focus=focus, instructions=instructions))
-        except FileNotFoundError as e:
-            raise click.ClickException(str(e))
-        return
-
-    click.echo(f"Extracting from: {phantasia_slug}")
-    if dry_run:
-        click.echo("(dry run - no files will be written)")
-
+    _one_mode(context, response_file)
     try:
-        if response_file is not None:
-            results = apply_extraction(phantasia_slug, response_file.read_text(encoding='utf-8'), dry_run=dry_run)
-        else:
-            results = extract_from_phantasia(
-                phantasia_slug,
-                focus=focus,
-                instructions=instructions,
-                dry_run=dry_run,
-            )
-
-        # Report results
-        if results['created_doxai']:
-            click.echo(f"\nCreated {len(results['created_doxai'])} doxai:")
-            for slug in results['created_doxai']:
-                click.echo(f"  + {slug}")
-
-        if results['created_evidence']:
-            click.echo(f"\nCreated {len(results['created_evidence'])} evidence:")
-            for slug in results['created_evidence']:
-                click.echo(f"  + {slug}")
-
-        if results['created_edges']:
-            click.echo(f"\nCreated {len(results['created_edges'])} edges:")
-            for edge in results['created_edges']:
-                # Handle both ExtractedEdge objects (dry-run) and tuples (normal)
-                if hasattr(edge, 'source'):
-                    click.echo(f"  {edge.source} --[{edge.edge_type}]--> {edge.target}")
-                else:
-                    source, target, edge_type = edge[:3]
-                    click.echo(f"  {source} --[{edge_type}]--> {target}")
-
-        if results['skipped']:
-            click.echo(f"\nSkipped {len(results['skipped'])} duplicates:")
-            for dup in results['skipped']:
-                click.echo(f"  ~ \"{dup.get('belief', '?')[:50]}...\"")
-                click.echo(f"    matches: {dup.get('matches', '?')}")
-
-        if results['suggested_links']:
-            click.echo(f"\nSuggested {len(results['suggested_links'])} links (from related beliefs):")
-            for source, target, edge_type in results['suggested_links']:
-                click.echo(f"  {source} --[{edge_type}]--> {target}")
-
-        if results['errors']:
-            click.echo(f"\nErrors ({len(results['errors'])}):", err=True)
-            for error in results['errors']:
-                click.echo(f"  ! {error}", err=True)
-
-        # Summary
-        total_created = len(results['created_doxai']) + len(results['created_evidence'])
-        if total_created > 0:
-            click.echo(f"\nDone! Created {total_created} artifact(s).")
-        else:
-            click.echo("\nNo new artifacts created.")
-
-    except FileNotFoundError as e:
-        click.echo(f"ERROR: {e}", err=True)
-        sys.exit(1)
-    except GraphIntegrityError as e:
-        click.echo("ERROR: nothing was written; the candidate graph is invalid:", err=True)
-        for issue in e.report.issues:
-            click.echo(f"  ! {issue.code}: {issue.message}", err=True)
-        sys.exit(1)
-    except Exception as e:
-        click.echo(f"ERROR: Extraction failed: {e}", err=True)
-        sys.exit(1)
-
-
-@cli.command()
-@click.option('--focus', help='Focus area (e.g., "tensions", "AI economics")')
-@click.option('--apply', 'apply_edges', is_flag=True, help='Automatically add proposed edges')
-@click.option('--batch', is_flag=True, help='Batch by graph clusters for deeper coverage')
-@click.option('--recent', type=int, default=None, help='Select N clusters with most recent doxai (implies --batch)')
-def integrate(focus: str, apply_edges: bool, batch: bool, recent: int):
-    """Run deep integration pass on the doxai library.
-
-    Analyzes the complete belief graph to find:
-    - Missing relationships between beliefs
-    - Tensions and contradictions
-    - Evidence gaps
-    - Potential narrative clusters (diegeses)
-
-    Uses Gemini with full library context (1M tokens).
-
-    With --batch, partitions the graph into communities and runs a separate
-    integration pass on each cluster, then a cross-cluster pass for bridging
-    edges. Produces significantly more edge proposals.
-
-    With --recent N, selects the N clusters containing the most recently-added
-    doxai and runs batched integration on just those.
-
-    Examples:
-      dox integrate                    # Full analysis (single pass)
-      dox integrate --batch            # Batched by cluster (deeper)
-      dox integrate --batch --apply    # Batched + auto-apply
-      dox integrate --recent 3 --apply # 3 newest clusters + auto-apply
-      dox integrate --focus tensions   # Focus on contradictions
-    """
-    if recent:
-        click.echo(f"Running batched integration on {recent} most recent clusters...")
-    elif batch:
-        click.echo("Running batched integration pass...")
-    else:
-        click.echo("Running deep integration pass...")
-    if focus:
-        click.echo(f"Focus: {focus}")
-
-    def progress(msg):
-        click.echo(msg)
-
-    try:
-        result = run_integration(
-            focus=focus,
-            apply_edges=apply_edges,
-            batch=batch,
-            recent=recent,
-            progress_callback=progress,
-        )
-
-        # Report proposed edges
-        if result.proposed_edges:
-            click.echo(f"\n=== Proposed Edges ({len(result.proposed_edges)}) ===")
-            for edge in result.proposed_edges:
-                click.echo(f"\n  {edge.source} --[{edge.edge_type}]--> {edge.target}")
-                click.echo(f"  Strength: {edge.strength}")
-                if edge.annotation:
-                    # Truncate annotation for display
-                    annotation = edge.annotation[:100] + "..." if len(edge.annotation) > 100 else edge.annotation
-                    click.echo(f"  {annotation}")
-
-            if apply_edges:
-                click.echo("\n  (Edges applied to logos.yaml)")
-            else:
-                click.echo("\n  Run with --apply to add these edges")
-
-        # Report tensions
-        if result.tensions:
-            click.echo(f"\n=== Tensions ({len(result.tensions)}) ===")
-            for tension in result.tensions:
-                beliefs = ", ".join(tension.beliefs)
-                click.echo(f"\n  [{tension.severity.upper()}] {beliefs}")
-                if tension.description:
-                    desc = tension.description[:150] + "..." if len(tension.description) > 150 else tension.description
-                    click.echo(f"  {desc}")
-                if tension.resolution_options:
-                    click.echo("  Possible resolutions:")
-                    for opt in tension.resolution_options[:2]:
-                        click.echo(f"    - {opt}")
-
-        # Report evidence gaps
-        if result.gaps:
-            click.echo(f"\n=== Evidence Gaps ({len(result.gaps)}) ===")
-            for gap in result.gaps:
-                click.echo(f"\n  {gap.belief} ({gap.gap_type})")
-                if gap.description:
-                    desc = gap.description[:100] + "..." if len(gap.description) > 100 else gap.description
-                    click.echo(f"  {desc}")
-
-        # Report cluster opportunities
-        if result.clusters:
-            click.echo(f"\n=== Cluster Opportunities ({len(result.clusters)}) ===")
-            for cluster in result.clusters:
-                click.echo(f"\n  \"{cluster.name}\"")
-                click.echo(f"  Beliefs: {', '.join(cluster.beliefs[:5])}")
-                if len(cluster.beliefs) > 5:
-                    click.echo(f"           ... and {len(cluster.beliefs) - 5} more")
-
-        # Report errors
-        if result.errors:
-            click.echo("\n=== Notes ===")
-            for error in result.errors:
-                click.echo(f"  {error}")
-
-        # Summary
-        total_findings = (
-            len(result.proposed_edges) +
-            len(result.tensions) +
-            len(result.gaps) +
-            len(result.clusters)
-        )
-        click.echo("\n=== Summary ===")
-        click.echo(f"  Proposed edges: {len(result.proposed_edges)}")
-        click.echo(f"  Tensions: {len(result.tensions)}")
-        click.echo(f"  Evidence gaps: {len(result.gaps)}")
-        click.echo(f"  Cluster opportunities: {len(result.clusters)}")
-
-        if total_findings == 0:
-            click.echo("\nNo findings. The graph appears well-integrated.")
-
-    except Exception as e:
-        click.echo(f"ERROR: Integration failed: {e}", err=True)
-        sys.exit(1)
-
-
-@cli.command()
-@click.option('--apply', 'apply_corrections', is_flag=True, help='Apply corrections to logos.yaml')
-@click.option('--model', default='gemini-2.5-pro', help='Gemini model to use (default: gemini-2.5-pro)')
-def audit(apply_corrections: bool, model: str):
-    """Audit all edges for correct typing and rationales.
-
-    Uses Gemini with full belief context to evaluate every edge in the graph.
-    For each edge, the audit will:
-    - CONFIRM the type is correct, or CORRECT it to the right type
-    - Provide a rationale explaining WHY the relationship exists
-    - Assign a confidence level (high/medium/low)
-
-    This is especially useful for:
-    - Reviewing edges created by extraction passes
-    - Ensuring 'contradicts' edges are truly contradictions (not resolutions)
-    - Hydrating edges with substantive rationales
-
-    Examples:
-      dox audit                    # Review all edges (no changes)
-      dox audit --apply            # Apply corrections to logos.yaml
-      dox audit --model gemini-2.0-flash  # Use different model
-    """
-    click.echo("Running edge audit pass...")
-    click.echo(f"Model: {model}")
-    if apply_corrections:
-        click.echo("(will apply corrections)")
-
-    try:
-        result = run_audit(apply=apply_corrections, model=model)
-
-        # Report results
-        if result.errors:
-            for error in result.errors:
-                click.echo(f"  ! {error}", err=True)
-            if not result.audits:
-                sys.exit(1)
-
-        if not result.audits:
-            click.echo("\nNo edges audited.")
+        if context:
+            _emit_context(extraction_context(phantasia_slug))
             return
+        results = apply_extraction(phantasia_slug, response_file.read_text(encoding='utf-8'), dry_run=dry_run)
+    except (FileNotFoundError, ValueError) as error:
+        if isinstance(error, GraphIntegrityError):
+            _refuse(error)
+        raise click.ClickException(str(error))
 
-        # Summary counts
-        click.echo("\n=== Audit Results ===")
-        click.echo(f"Total audited: {len(result.audits)}")
-        click.echo(f"Confirmed: {result.confirmed}")
-        click.echo(f"Corrections: {result.corrected}")
+    verb = 'Would create' if dry_run else 'Created'
+    for label, key in (('doxai', 'created_doxai'), ('evidence', 'created_evidence')):
+        if results[key]:
+            click.echo(f"{verb} {len(results[key])} {label}:")
+            for slug in results[key]:
+                click.echo(f"  + {slug}")
+    if results['created_edges']:
+        click.echo(f"{verb} {len(results['created_edges'])} edges:")
+        for source, target, edge_type in results['created_edges']:
+            click.echo(f"  {source} --[{edge_type}]--> {target}")
+    for dup in results['skipped']:
+        click.echo(f"Duplicate of {dup.get('matches', '?')}: \"{dup.get('belief', '?')[:60]}\"")
+    if dry_run:
+        click.echo("Dry run: nothing written.")
 
-        # Show corrections
-        corrections = [a for a in result.audits if a.verdict == 'CORRECT']
-        if corrections:
-            click.echo(f"\n=== Corrections ({len(corrections)}) ===")
-            for audit in corrections:
-                click.echo(f"\n  {audit.source} → {audit.target}")
-                click.echo(f"  {audit.current_type} → {audit.correct_type}")
-                if audit.alias:
-                    click.echo(f"  Alias: \"{audit.alias}\"")
-                click.echo(f"  Confidence: {audit.confidence}")
-                if audit.rationale:
-                    rationale = audit.rationale[:150] + "..." if len(audit.rationale) > 150 else audit.rationale
-                    click.echo(f"  Rationale: {rationale}")
-                if audit.flags:
-                    click.echo(f"  Flags: {', '.join(audit.flags)}")
 
-            if not apply_corrections:
-                click.echo("\n  Run with --apply to apply these corrections")
+@cli.command()
+@click.option('--context', is_flag=True, help='Print clusters, or one unit of work with --cluster, as JSON')
+@click.option('--cluster', help='With --context: a cluster number, "all", or "cross"')
+@_RESPONSE
+@_DRY_RUN
+def integrate(context: bool, cluster: str | None, response_file: Path | None, dry_run: bool):
+    """Find edges the graph is missing.
 
-        # Show sample confirmations
-        confirmations = [a for a in result.audits if a.verdict == 'CONFIRM']
-        if confirmations:
-            click.echo(f"\n=== Sample Confirmations (showing 5/{len(confirmations)}) ===")
-            for audit in confirmations[:5]:
-                click.echo(f"\n  {audit.source} → {audit.target} [{audit.current_type}]")
-                if audit.alias:
-                    click.echo(f"  Alias: \"{audit.alias}\"")
-                click.echo(f"  Confidence: {audit.confidence}")
-                if audit.rationale:
-                    rationale = audit.rationale[:100] + "..." if len(audit.rationale) > 100 else audit.rationale
-                    click.echo(f"  Rationale: {rationale}")
+    \b
+      --context                 clusters to choose from
+      --context --cluster N     one cluster's beliefs and edges
+      --context --cluster all   the whole graph
+      --context --cluster cross every belief labelled by cluster, for bridges
+      --response FILE           validate proposed ===EDGE=== blocks, then add them
 
-        # Final summary
-        if apply_corrections and corrections:
-            click.echo(f"\n✓ Applied {len(corrections)} correction(s) to logos.yaml")
-        elif corrections:
-            click.echo(f"\n⚠ {len(corrections)} correction(s) pending. Use --apply to fix.")
-        else:
-            click.echo(f"\n✓ All {len(confirmations)} edges confirmed correct.")
+    Your agent judges, following the dox-knowledge skill (references/integrate.md).
+    """
+    _one_mode(context, response_file)
+    if cluster and not context:
+        raise click.UsageError('--cluster needs --context')
+    try:
+        if context:
+            _emit_context(integration_context(cluster) if cluster else integration_overview())
+            return
+        result = apply_integration(response_file.read_text(encoding='utf-8'), dry_run=dry_run)
+    except ValueError as error:
+        if isinstance(error, GraphIntegrityError):
+            _refuse(error)
+        raise click.ClickException(str(error))
+    click.echo(f"{'Would add' if dry_run else 'Added'} {len(result['added'])} edges:")
+    for source, target, edge_type in result['added']:
+        click.echo(f"  {source} --[{edge_type}]--> {target}")
+    if result['skipped_existing']:
+        click.echo(f"Skipped {len(result['skipped_existing'])} already present.")
 
-    except Exception as e:
-        click.echo(f"ERROR: Audit failed: {e}", err=True)
-        sys.exit(1)
+
+@cli.command()
+@click.option('--context', is_flag=True, help='Print edges with both endpoint beliefs, as JSON')
+@click.option('--offset', type=int, default=0, show_default=True, help='With --context: first edge')
+@click.option('--limit', type=int, help='With --context: number of edges (default all)')
+@_RESPONSE
+@_DRY_RUN
+def audit(context: bool, offset: int, limit: int | None, response_file: Path | None, dry_run: bool):
+    """Confirm or correct each edge's type, rationale and alias.
+
+    \b
+      --context [--offset N --limit M]   a page of edges to review
+      --response FILE                    validate ===AUDIT=== verdicts, then apply
+
+    Your agent judges, following the dox-knowledge skill (references/audit.md).
+    """
+    _one_mode(context, response_file)
+    try:
+        if context:
+            _emit_context(audit_context(offset, limit))
+            return
+        result = apply_audit(response_file.read_text(encoding='utf-8'), dry_run=dry_run)
+    except ValueError as error:
+        if isinstance(error, GraphIntegrityError):
+            _refuse(error)
+        raise click.ClickException(str(error))
+    click.echo(f"Confirmed {len(result['confirmed'])}; corrected {len(result['corrected'])}:")
+    for (source, target, old), new in result['corrected']:
+        click.echo(f"  {source} --[{old} -> {new}]--> {target}")
+    if dry_run:
+        click.echo("Dry run: nothing written.")
 
 
 # =============================================================================
