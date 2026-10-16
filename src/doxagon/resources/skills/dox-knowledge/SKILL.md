@@ -57,9 +57,25 @@ format `--response` accepts.
 |---|---|
 | Claims, quotes and citations come only from the material in front of you | the graph records what sources support, not what you know |
 | Edge types only from the context's `edge_types` | unregistered types are refused |
-| `domain:` tags only from the context's `domains`; ask before registering a new one in `knowledge/schema.yaml` `tag_prefixes.domain.values` | domains are a controlled vocabulary |
+| `domain:` tags only from the context's `domains` | domains are a controlled vocabulary; see [New domains](#new-domains) |
 | New doxai are `status: draft` | the user, not the judge, promotes a belief to `canonical` |
 | Leave out `source_url` when the source has none | an empty or made-up URL reads as a citation |
+
+## New domains
+
+A domain is a controlled topic label (`tags: [domain:baking]`) that `dox list
+--tag` and `dox graph --domain` filter on. Before a new one is registered,
+check the registered list (`dox domain list`) for one that already means it:
+
+| The new name | Do |
+|---|---|
+| is a misspelling of a registered domain (`epistomology` / `epistemology`) | use the registered one; `dox domain add` refuses near-spellings by itself |
+| overlaps a registered domain (`bread` / `baking`, `ml` / `machine-learning`) | ask the user which to use |
+| was named by the user and nothing registered is close | register it with `dox domain add NAME` and say so; naming it was the consent |
+| is one you want to propose yourself | ask first |
+
+Never hand-edit the domain list; `dox domain add` changes only that list and
+leaves the rest of the schema as it was.
 
 ## Afterwards
 

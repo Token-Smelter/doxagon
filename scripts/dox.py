@@ -737,6 +737,35 @@ def types():
         click.echo(f"{type_name}: {desc}{sym_label}")
 
 
+@cli.group()
+def domain():
+    """List or register the controlled `domain:` tag values."""
+
+
+@domain.command('list')
+def domain_list():
+    """List registered domains."""
+    from doxagon.agent_context import vocabulary
+    for name in vocabulary()['domains']:
+        click.echo(name)
+
+
+@domain.command('add')
+@click.argument('name')
+@click.option('--force', is_flag=True, help='Register even if it looks like a misspelling of an existing domain')
+def domain_add(name: str, force: bool):
+    """Register NAME as a domain, refusing likely misspellings of existing ones."""
+    from doxagon.agent_context import register_domain
+    try:
+        similar = register_domain(name, force=force)
+    except ValueError as error:
+        raise click.ClickException(str(error))
+    if similar and not force:
+        raise click.ClickException(
+            f"{name!r} looks like {', '.join(repr(s) for s in similar)}; use that, or pass --force to add it anyway")
+    click.echo(f"Registered domain:{name}")
+
+
 def generate_slug(text: str, max_length: int = 50) -> str:
     """Generate a valid filename slug from belief text."""
     # Lowercase and normalize

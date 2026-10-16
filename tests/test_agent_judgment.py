@@ -83,6 +83,30 @@ def test_audit_refuses_a_verdict_for_an_edge_that_does_not_exist(vault, tmp_path
     assert (result.returncode, "no edge" in result.stderr) == (1, True)
 
 
+def test_domain_add_refuses_a_misspelling_of_a_registered_domain(vault):
+    assert dox(vault, "domain", "add", "epistemology").returncode == 0
+    result = dox(vault, "domain", "add", "epistomology")
+    assert (result.returncode, "'epistemology'" in result.stderr) == (1, True)
+
+
+def test_domain_add_changes_only_the_list(vault):
+    schema = vault / "knowledge/schema.yaml"
+    head = "# kept comment\ntag_prefixes:\n  domain:\n    controlled: true\n"
+    schema.write_text(schema.read_text().split("tag_prefixes:")[0] + head
+                      + "    values: [alpha, beta,\n      gamma]\n    description: kept\n")
+    assert dox(vault, "domain", "add", "delta").returncode == 0
+    text = schema.read_text()
+    assert ("# kept comment" in text, yaml.safe_load(text)["tag_prefixes"]["domain"]) == (
+        True, {"controlled": True, "values": ["alpha", "beta", "gamma", "delta"], "description": "kept"})
+
+
+def test_validate_suggests_the_registered_spelling(vault):
+    dox(vault, "domain", "add", "epistemology")
+    doxa = vault / f"knowledge/doxai/{OVEN}.md"
+    doxa.write_text(doxa.read_text().replace("tags: []", "tags: [domain:epistomology]", 1))
+    assert "did you mean 'epistemology'" in dox(vault, "validate").stdout
+
+
 @pytest.mark.parametrize("reference,command,blocks", [
     ("extract.md", "extract", ("DOXA", "EVIDENCE", "EDGES", "DUPLICATE")),
     ("integrate.md", "integrate", ("EDGE",)),

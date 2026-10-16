@@ -99,6 +99,7 @@ dox phantasia add <file>          # admit a source; then extract it
 dox extract <p-slug> --context    # JSON for you to judge; then --response
 dox integrate --context           # clusters; find missing edges, then --response
 dox audit --context               # edges to confirm or correct, then --response
+dox domain list | add <name>      # controlled domain: tags; add refuses misspellings
 dox link <source> <target> <edge_type> [--alias LABEL]
 dox unlink <source> <target> <edge_type>
 dox validate                      # integrity codes; run before you finish

@@ -16,7 +16,7 @@ from doxagon import agent_context
 from doxagon.config import DOXAI_DIR, EVIDENCE_DIR, PHANTASIAI_DIR, ROOT_DIR, SCHEMA_FILE
 from doxagon.graph import invalidate_cache
 from doxagon.storage import check_logos, write_logos
-from doxagon.validation import GraphIntegrityError, ValidationIssue, ValidationReport
+from doxagon.validation import GraphIntegrityError, ValidationIssue, ValidationReport, did_you_mean
 
 
 def _vault_file(reference: str):
@@ -218,10 +218,10 @@ def _candidate_logos(validated: ValidationResult) -> tuple[dict, list[tuple[str,
         for slug, content in validated.valid_doxai:
             for tag in frontmatter.loads(content).get('tags') or []:
                 if isinstance(tag, str) and tag.startswith('domain:') and tag.partition(':')[2] not in domains:
+                    domain = tag.partition(':')[2]
+                    hint = did_you_mean(domain, domains) or f"; register it with `dox domain add {domain}` or drop the tag"
                     report.issues.append(ValidationIssue(
-                        "malformed_domain",
-                        f"{slug}: unregistered domain tag {tag!r}; add it to tag_prefixes.domain.values "
-                        f"in {SCHEMA_FILE.name} or drop the tag"))
+                        "malformed_domain", f"{slug}: unregistered domain tag {tag!r}{hint}"))
     if not report.valid:
         raise GraphIntegrityError(report)
     return logos, added

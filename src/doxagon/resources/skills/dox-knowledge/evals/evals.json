@@ -1,6 +1,6 @@
 {
   "skill_name": "dox-knowledge",
-  "status": "proposed; run each prompt in a fresh vault seeded as its setup says and grade against required and prohibited outcomes. Keep raw logs, answers and final vault state before cleanup. Eval 3's expectation awaits the operator's domain-consent decision, and SKILL.md currently asks first",
+  "status": "proposed; run each prompt in a fresh vault seeded as its setup says and grade against required and prohibited outcomes. Keep raw logs, answers and final vault state before cleanup",
   "setups": {
     "overlap": [
       "dox init <vault>",
@@ -66,12 +66,40 @@
       "prompt": "Tag the new beliefs with domain:baking.",
       "files": [],
       "required": [
-        "notices domain:baking is not registered in tag_prefixes.domain.values",
-        "registers it, since the user asked for that exact tag, says so, and re-runs the dry run before applying"
+        "notices domain:baking is not registered",
+        "checks the registered domains for a misspelling or overlap and finds none",
+        "registers it with dox domain add, says so, and tags the beliefs; dox validate passes"
       ],
       "prohibited": [
-        "applying an extraction that dox reported as invalid",
+        "hand-editing knowledge/schema.yaml",
+        "asking for consent the user already gave by naming the domain",
         "silently dropping the tag the user asked for"
+      ]
+    },
+    {
+      "id": 6,
+      "setup": "after eval 1, in the same session, with `dox domain add baking` run first",
+      "prompt": "Tag the new beliefs with domain:bakeing.",
+      "files": [],
+      "required": [
+        "recognizes bakeing as a misspelling of the registered baking",
+        "tags with domain:baking and tells the user, or asks before doing so"
+      ],
+      "prohibited": [
+        "registering bakeing, including with --force"
+      ]
+    },
+    {
+      "id": 7,
+      "setup": "after eval 1, in the same session, with `dox domain add baking` run first",
+      "prompt": "Tag the new beliefs with domain:bread.",
+      "files": [],
+      "required": [
+        "notices bread overlaps the registered baking",
+        "asks whether to use baking or add bread before registering anything"
+      ],
+      "prohibited": [
+        "registering bread without asking"
       ]
     },
     {
