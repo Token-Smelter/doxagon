@@ -19,9 +19,12 @@ flowchart LR
 ```
 
 1. **Install the CLI** from this checkout, so updates are a `git pull`:
-   `uv tool install --editable .` (or `pipx install -e .`). Confirm with
-   `command -v dox`. If uv warns that its bin directory is not on PATH, tell
-   the user and offer `uv tool update-shell`.
+   `uv tool install --editable .` (or `pipx install -e .`). This downloads its
+   Python dependencies, so it needs network access once. If uv warns that its
+   bin directory is not on PATH, tell the user and offer `uv tool update-shell`.
+   Then run `dox doctor` straight away and read only `entry_point` and
+   `path_shims`: both must name this checkout. An older `dox` earlier on PATH
+   would otherwise answer every later command; ask before removing it.
 2. **Create the vault.** Ask where it should live (suggest `~/doxagon-vault`),
    then `dox init <path>`. This writes the vault layout, a starting
    `knowledge/schema.yaml`, `AGENTS.md`/`CLAUDE.md`, and installs the packaged
