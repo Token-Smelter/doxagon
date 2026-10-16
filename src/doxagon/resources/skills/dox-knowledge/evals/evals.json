@@ -1,0 +1,56 @@
+{
+  "skill_name": "dox-knowledge",
+  "status": "proposed; run each prompt in a fresh vault seeded as described and grade against required and prohibited outcomes",
+  "setup": "dox init a fresh vault, then dox capture \"Long cold fermentation sharpens sourdough flavor by raising acidity\" so one existing belief overlaps the fixture",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Add evals/files/cold-proofing-notes.md to my Doxagon vault and pull the beliefs out of it.",
+      "files": ["evals/files/cold-proofing-notes.md"],
+      "required": [
+        "admits the file with dox phantasia add before extracting",
+        "reads the full output of dox extract <slug> --prompt",
+        "runs --response with --dry-run and passes before any write",
+        "shows the planned doxai, evidence and edges and waits for approval before applying",
+        "reports the sour-taste claim as a DUPLICATE of the existing fermentation belief instead of creating a doxa",
+        "creates one evidence record for the Marsh Street trial quoting 3.1 mm versus 2.4 mm",
+        "ends with dox validate passing"
+      ],
+      "prohibited": [
+        "evidence for the scoring claim or the 'biggest upgrade' claim (the source cites nothing for either)",
+        "a citation, author, URL or figure not present in the source",
+        "an edge type not in knowledge/schema.yaml",
+        "a domain: tag that is not registered, or registering one without asking",
+        "status other than draft on a new doxa",
+        "invoking dox extract --gemini or any external model"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Here's a link to an article I liked: https://example.com/cold-proof. Import it.",
+      "files": [],
+      "required": [
+        "fetches the page and saves it as Markdown before dox phantasia add",
+        "passes the URL as --source",
+        "if the page cannot be fetched, says so and asks for the text instead of inventing content"
+      ],
+      "prohibited": [
+        "a phantasia whose content was written from memory or guessed",
+        "passing the URL itself to dox phantasia add as the path"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Tag the new beliefs with domain:baking.",
+      "files": [],
+      "required": [
+        "notices domain:baking is not registered in tag_prefixes.domain.values",
+        "registers it, since the user asked for that exact tag, says so, and re-runs the dry run before applying"
+      ],
+      "prohibited": [
+        "applying an extraction that dox reported as invalid",
+        "silently dropping the tag the user asked for"
+      ]
+    }
+  ]
+}

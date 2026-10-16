@@ -2,10 +2,11 @@
 
 This module handles:
 1. Loading phantasia content
-2. Building context (existing beliefs for dedup)
-3. Calling Gemini for extraction
-4. Parsing LLM output into artifacts
-5. Validating artifacts (schema + dedup)
+2. Building the extraction prompt (with existing beliefs for dedup)
+3. Obtaining a response: from the calling agent (`extraction_prompt` then
+   `apply_extraction`), or from the optional Gemini CLI (`extract_from_phantasia`)
+4. Parsing the response into artifacts
+5. Validating artifacts, including the whole candidate edge set
 6. Writing validated artifacts to disk
 """
 
@@ -18,45 +19,43 @@ from datetime import date
 import frontmatter
 import yaml
 
-from doxagon.config import DOXAI_DIR, EVIDENCE_DIR, PHANTASIAI_DIR, LOGOS_FILE, LIBRARY_DIR
+from doxagon.config import DOXAI_DIR, EVIDENCE_DIR, PHANTASIAI_DIR, LOGOS_FILE, ROOT_DIR, SCHEMA_FILE
 from doxagon.graph import invalidate_cache
 from doxagon.prompts import load_prompt
 from doxagon.storage import write_logos
+from doxagon.validation import GraphIntegrityError, ValidationIssue, ValidationReport, validate_edge_records
+
+
+def _vault_file(reference: str):
+    """Resolve a vault-relative file reference, refusing paths that leave the vault."""
+    if not reference or "://" in reference:
+        return None
+    root = ROOT_DIR.resolve()
+    candidate = (root / reference).resolve()
+    if root not in candidate.parents or not candidate.is_file():
+        return None
+    return candidate
 
 
 def resolve_phantasia_content(phantasia) -> str:
     """Resolve the full content of a phantasia, following source file references.
 
-    If the phantasia's source field points to a file (e.g., library/inbox/file.md),
-    read that file and return its content. Otherwise return the phantasia body.
+    If the phantasia's source field, or a `See: path` line in its body, names a
+    text file inside the vault (e.g. knowledge/inbox/file.md), return that file's
+    content. Otherwise return the phantasia body.
     """
-    source = phantasia.get("source", "")
     content = phantasia.content or ""
-
-    # Check if source is a library file path
-    if source.startswith("library/"):
-        source_path = LIBRARY_DIR.parent / source
-        if source_path.exists():
-            try:
-                return source_path.read_text()
-            except Exception:
-                pass  # Fall through to body content
-
-    # If body just says "See: path", try to read that path
-    if content.strip().startswith("See:") or content.strip().startswith("## Source Content"):
-        # Extract path from body
-        lines = content.strip().split("\n")
-        for line in lines:
-            if line.strip().startswith("See:"):
-                ref_path = line.split("See:", 1)[1].strip()
-                if ref_path.startswith("library/"):
-                    full_path = LIBRARY_DIR.parent / ref_path
-                    if full_path.exists():
-                        try:
-                            return full_path.read_text()
-                        except Exception:
-                            pass
-
+    references = [str(phantasia.get("source", ""))]
+    references += [line.split("See:", 1)[1].strip().strip("`")
+                   for line in content.splitlines() if line.strip().startswith("See:")]
+    for reference in references:
+        path = _vault_file(reference)
+        if path is None:
+            continue
+        try:
+            return path.read_text()
+        except (OSError, UnicodeDecodeError):
+            continue
     return content
 
 
@@ -322,8 +321,13 @@ def check_dedup(belief: str) -> dict:
     return {"result": "ERROR"}
 
 
-def validate_extraction(parsed: ExtractionResult) -> ValidationResult:
-    """Validate all parsed artifacts, including dedup checks."""
+def validate_extraction(parsed: ExtractionResult, dedup: bool = True) -> ValidationResult:
+    """Validate all parsed artifacts.
+
+    `dedup` runs the Gemini-backed `dox dedup` per belief. The agent path turns
+    it off: the agent saw every existing belief in its prompt and reports
+    duplicates itself.
+    """
     result = ValidationResult()
     created_slugs: set[str] = set()
 
@@ -336,20 +340,19 @@ def validate_extraction(parsed: ExtractionResult) -> ValidationResult:
 
         belief = metadata.get('belief', '')
 
-        # Check semantic dedup
-        dedup = check_dedup(belief)
-        if dedup.get('result') == 'DUPLICATE':
+        verdict = check_dedup(belief) if dedup else {}
+        if verdict.get('result') == 'DUPLICATE':
             result.skipped_duplicates.append({
                 'belief': belief,
-                'matches': dedup.get('slug', ''),
-                'reason': dedup.get('reason', 'Semantic duplicate'),
+                'matches': verdict.get('slug', ''),
+                'reason': verdict.get('reason', 'Semantic duplicate'),
             })
             continue
-        elif dedup.get('result') == 'RELATED':
+        elif verdict.get('result') == 'RELATED':
             # Still create, but suggest link
             result.suggested_links.append((
                 f"d-{generate_slug(belief)}",
-                dedup.get('slug', ''),
+                verdict.get('slug', ''),
                 'elaborates',
             ))
 
@@ -407,91 +410,162 @@ def validate_extraction(parsed: ExtractionResult) -> ValidationResult:
     return result
 
 
+def _candidate_logos(validated: ValidationResult) -> tuple[dict, list[tuple[str, str, str]]]:
+    """Merge extracted and suggested edges into the current logos and validate the result.
+
+    Validation runs before any file is written, so a bad edge refuses the whole
+    extraction instead of leaving new doxai behind without their edges.
+    """
+    logos = (yaml.safe_load(LOGOS_FILE.read_text()) if LOGOS_FILE.exists() else None) or {}
+    edges = list(logos.get('edges') or [])
+    existing_keys = set()
+    for e in edges:
+        if isinstance(e, dict):
+            existing_keys.add((e.get('source'), e.get('target'), e.get('type')))
+        elif isinstance(e, list) and len(e) >= 3:
+            existing_keys.add((e[0], e[1], e[2]))
+
+    today = date.today().isoformat()
+    added: list[tuple[str, str, str]] = []
+    for extracted in validated.valid_edges:
+        edge = {
+            'source': extracted.source,
+            'target': extracted.target,
+            'type': extracted.edge_type,
+            'strength': 'moderate',
+            'confidence': extracted.confidence,
+        }
+        if extracted.rationale:
+            edge['rationale'] = extracted.rationale
+        edge['provenance'] = {'method': 'extraction'}
+        edge['created'] = today
+        edges.append(edge)
+        key = (extracted.source, extracted.target, extracted.edge_type)
+        existing_keys.add(key)
+        added.append(key)
+    for key in validated.suggested_links:
+        if key in existing_keys:
+            continue
+        source, target, edge_type = key
+        edges.append({
+            'source': source,
+            'target': target,
+            'type': edge_type,
+            'strength': 'moderate',
+            'provenance': {'method': 'dedup-suggestion'},
+            'created': today,
+        })
+        existing_keys.add(key)
+        added.append(key)
+
+    if added or validated.valid_doxai:
+        if not SCHEMA_FILE.exists():
+            raise GraphIntegrityError(ValidationReport([ValidationIssue(
+                "schema_missing", f"{SCHEMA_FILE} is missing, so edge types and domains cannot be validated")]))
+        schema = yaml.safe_load(SCHEMA_FILE.read_text()) or {}
+        report = ValidationReport()
+        if added:
+            doxa_ids = {item.stem for item in DOXAI_DIR.glob('**/*.md')
+                        if item.stem.upper() != 'README'} if DOXAI_DIR.exists() else set()
+            doxa_ids |= {slug for slug, _ in validated.valid_doxai}
+            report.extend(validate_edge_records(edges, doxa_ids=doxa_ids,
+                                                valid_edge_types=set(schema.get('edge_types', {}))))
+        domains = set(((schema.get('tag_prefixes') or {}).get('domain') or {}).get('values') or [])
+        for slug, content in validated.valid_doxai:
+            for tag in frontmatter.loads(content).get('tags') or []:
+                if isinstance(tag, str) and tag.startswith('domain:') and tag.partition(':')[2] not in domains:
+                    report.issues.append(ValidationIssue(
+                        "malformed_domain",
+                        f"{slug}: unregistered domain tag {tag!r}; add it to tag_prefixes.domain.values "
+                        f"in {SCHEMA_FILE.name} or drop the tag"))
+        if not report.valid:
+            raise GraphIntegrityError(report)
+    logos['edges'] = edges
+    return logos, added
+
+
 def write_artifacts(validated: ValidationResult, dry_run: bool = False) -> dict:
-    """Write validated artifacts to disk."""
+    """Validate the candidate graph, then write artifacts to disk."""
+    logos, added_edges = _candidate_logos(validated)
     results = {
-        'created_doxai': [],
-        'created_evidence': [],
-        'created_edges': [],
+        'created_doxai': [slug for slug, _ in validated.valid_doxai],
+        'created_evidence': [slug for slug, _ in validated.valid_evidence],
+        'created_edges': added_edges,
         'skipped': validated.skipped_duplicates,
         'suggested_links': validated.suggested_links,
         'errors': validated.errors,
     }
-
     if dry_run:
-        results['created_doxai'] = [slug for slug, _ in validated.valid_doxai]
-        results['created_evidence'] = [slug for slug, _ in validated.valid_evidence]
-        results['created_edges'] = validated.valid_edges
         return results
 
-    # Write doxai
     DOXAI_DIR.mkdir(parents=True, exist_ok=True)
     for slug, content in validated.valid_doxai:
-        path = DOXAI_DIR / f"{slug}.md"
-        path.write_text(content)
-        results['created_doxai'].append(slug)
-
-    # Write evidence
+        (DOXAI_DIR / f"{slug}.md").write_text(content)
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
     for slug, content in validated.valid_evidence:
-        path = EVIDENCE_DIR / f"{slug}.md"
-        path.write_text(content)
-        results['created_evidence'].append(slug)
-
-    # Add edges to logos.yaml
-    if validated.valid_edges:
-        logos = yaml.safe_load(LOGOS_FILE.read_text()) if LOGOS_FILE.exists() else {}
-        edges = logos.get('edges', [])
-
-        for extracted in validated.valid_edges:
-            edge = {
-                'source': extracted.source,
-                'target': extracted.target,
-                'type': extracted.edge_type,
-                'strength': 'moderate',
-                'confidence': extracted.confidence,
-            }
-            if extracted.rationale:
-                edge['rationale'] = extracted.rationale
-            edge['provenance'] = {'method': 'extraction'}
-            edge['created'] = date.today().isoformat()
-            edges.append(edge)
-
-        logos['edges'] = edges
-        write_logos(logos)
-        results['created_edges'] = [(e.source, e.target, e.edge_type) for e in validated.valid_edges]
-
-    # Add suggested links from dedup (skip if already in edges)
-    if validated.suggested_links and not dry_run:
-        logos = yaml.safe_load(LOGOS_FILE.read_text()) if LOGOS_FILE.exists() else {}
-        edges = logos.get('edges', [])
-
-        # Build set of existing edge keys
-        existing_keys = set()
-        for e in edges:
-            if isinstance(e, dict):
-                existing_keys.add((e.get('source'), e.get('target'), e.get('type')))
-            elif isinstance(e, list) and len(e) >= 3:
-                existing_keys.add((e[0], e[1], e[2]))
-
-        for source, target, edge_type in validated.suggested_links:
-            # Skip if edge already exists
-            if (source, target, edge_type) in existing_keys:
-                continue
-            edges.append({
-                'source': source,
-                'target': target,
-                'type': edge_type,
-                'strength': 'moderate',
-                'provenance': {'method': 'dedup-suggestion'},
-                'created': date.today().isoformat(),
-            })
-            existing_keys.add((source, target, edge_type))
-
-        logos['edges'] = edges
+        (EVIDENCE_DIR / f"{slug}.md").write_text(content)
+    if added_edges:
         write_logos(logos)
 
     invalidate_cache()
+    return results
+
+
+def _load_phantasia(phantasia_slug: str):
+    path = PHANTASIAI_DIR / f"{phantasia_slug}.md"
+    if not path.exists():
+        raise FileNotFoundError(f"Phantasia not found: {path}")
+    return path, frontmatter.load(path)
+
+
+def _prompt(phantasia_slug: str, phantasia, content: str, existing_beliefs: str,
+            focus: str | None, instructions: str | None) -> str:
+    today = date.today().isoformat()
+    prompt = load_prompt(
+        "extract",
+        phantasia_title=phantasia.get("title", phantasia_slug),
+        phantasia_source=phantasia.get("source", "Unknown"),
+        phantasia_date=phantasia.get("encountered", today),
+        phantasia_content=content,
+        phantasia_slug=phantasia_slug,
+        existing_beliefs=existing_beliefs,
+        today=today,
+        tags="",
+        confidence="medium",
+        evidence_type="empirical | theoretical | anecdotal | expert-opinion | logical",
+        evidence_strength="strong | moderate | weak",
+    )
+    if focus:
+        prompt += f"\n\n## FOCUS AREAS\nPrioritize extraction of beliefs related to: {focus}"
+    if instructions:
+        prompt += f"\n\n## ADDITIONAL INSTRUCTIONS\n{instructions}"
+    return prompt
+
+
+def _mark_processed(path, phantasia, results: dict) -> None:
+    if results['created_doxai'] or results['created_evidence']:
+        phantasia.metadata['status'] = 'processed'
+        phantasia.metadata['extracted_doxai'] = results['created_doxai']
+        phantasia.metadata['extracted_evidence'] = results['created_evidence']
+        path.write_text(frontmatter.dumps(phantasia))
+
+
+def extraction_prompt(phantasia_slug: str, focus: str | None = None, instructions: str | None = None) -> str:
+    """Return the complete, unchunked extraction prompt for the calling agent."""
+    _, phantasia = _load_phantasia(phantasia_slug)
+    return _prompt(phantasia_slug, phantasia, resolve_phantasia_content(phantasia),
+                   get_existing_beliefs(), focus, instructions)
+
+
+def apply_extraction(phantasia_slug: str, response: str, dry_run: bool = False) -> dict:
+    """Validate and write an extraction response the calling agent produced."""
+    path, phantasia = _load_phantasia(phantasia_slug)
+    parsed = parse_extraction_response(response)
+    if not (parsed.doxai or parsed.evidence or parsed.edges or parsed.duplicates):
+        raise ValueError("Response has no ===DOXA===, ===EVIDENCE===, ===EDGES=== or ===DUPLICATE=== blocks")
+    results = write_artifacts(validate_extraction(parsed, dedup=False), dry_run=dry_run)
+    if not dry_run:
+        _mark_processed(path, phantasia, results)
     return results
 
 
@@ -501,7 +575,7 @@ def extract_from_phantasia(
     instructions: str | None = None,
     dry_run: bool = False,
 ) -> dict:
-    """Main extraction pipeline.
+    """Extract with the optional Gemini CLI, chunking large sources.
 
     Args:
         phantasia_slug: The phantasia to extract from (e.g., "p-my-source")
@@ -512,58 +586,18 @@ def extract_from_phantasia(
     Returns:
         Dictionary with created artifacts and any errors
     """
-    # Load phantasia
-    phantasia_path = PHANTASIAI_DIR / f"{phantasia_slug}.md"
-    if not phantasia_path.exists():
-        raise FileNotFoundError(f"Phantasia not found: {phantasia_path}")
-
-    phantasia = frontmatter.load(phantasia_path)
-
-    # Resolve full content (follows file references)
-    resolved_content = resolve_phantasia_content(phantasia)
-
-    # Get existing beliefs for dedup
+    phantasia_path, phantasia = _load_phantasia(phantasia_slug)
     existing_beliefs = get_existing_beliefs()
-    today = date.today().isoformat()
-
-    # Check if we need chunked extraction
-    chunks = chunk_content(resolved_content)
+    chunks = chunk_content(resolve_phantasia_content(phantasia))
     total_chunks = len(chunks)
-
     all_parsed = ExtractionResult()
 
     for chunk_num, chunk_text in chunks:
-        # Build chunk-specific prompt
         chunk_header = ""
         if total_chunks > 1:
             chunk_header = f"\n\n**Note:** This is chunk {chunk_num} of {total_chunks}. Extract beliefs from THIS chunk only.\n\n"
-
-        prompt = load_prompt(
-            "extract",
-            phantasia_title=phantasia.get("title", phantasia_slug),
-            phantasia_source=phantasia.get("source", "Unknown"),
-            phantasia_date=phantasia.get("encountered", today),
-            phantasia_content=chunk_header + chunk_text,
-            phantasia_slug=phantasia_slug,
-            existing_beliefs=existing_beliefs,
-            today=today,
-            tags="",
-            confidence="medium",
-            evidence_type="empirical | theoretical | anecdotal | expert-opinion | logical",
-            evidence_strength="strong | moderate | weak",
-        )
-
-        # Add optional focus/instructions
-        if focus:
-            prompt += f"\n\n## FOCUS AREAS\nPrioritize extraction of beliefs related to: {focus}"
-        if instructions:
-            prompt += f"\n\n## ADDITIONAL INSTRUCTIONS\n{instructions}"
-
-        # Call Gemini for this chunk
-        response = call_gemini(prompt)
-
-        # Parse response and accumulate
-        parsed = parse_extraction_response(response)
+        prompt = _prompt(phantasia_slug, phantasia, chunk_header + chunk_text, existing_beliefs, focus, instructions)
+        parsed = parse_extraction_response(call_gemini(prompt))
         all_parsed.doxai.extend(parsed.doxai)
         all_parsed.evidence.extend(parsed.evidence)
         all_parsed.edges.extend(parsed.edges)
@@ -580,20 +614,8 @@ def extract_from_phantasia(
             except Exception:
                 pass
 
-    # Validate all accumulated results (including dedup)
-    validated = validate_extraction(all_parsed)
-
-    # Write artifacts
-    results = write_artifacts(validated, dry_run=dry_run)
-
-    # Add chunk info to results
+    results = write_artifacts(validate_extraction(all_parsed), dry_run=dry_run)
     results['chunks_processed'] = total_chunks
-
-    # Update phantasia status
-    if not dry_run and (results['created_doxai'] or results['created_evidence']):
-        phantasia.metadata['status'] = 'processed'
-        phantasia.metadata['extracted_doxai'] = results['created_doxai']
-        phantasia.metadata['extracted_evidence'] = results['created_evidence']
-        phantasia_path.write_text(frontmatter.dumps(phantasia))
-
+    if not dry_run:
+        _mark_processed(phantasia_path, phantasia, results)
     return results
