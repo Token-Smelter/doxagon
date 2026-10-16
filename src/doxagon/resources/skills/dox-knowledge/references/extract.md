@@ -119,6 +119,10 @@ reason: Why these are the same claim
 ===END_DUPLICATE===
 ```
 
+A new vault registers no domains, so `domains` is empty: use `tags: []`, and
+after writing, offer to group the beliefs under a domain the user names (see
+SKILL.md, New domains).
+
 Required fields: a doxa needs `belief` (at least 10 characters), `status` and
 `provenance`. Evidence needs `assertion`, `source`, `type`, `strength` and
 `status`. Add `source_url` only when the source gives one. `type` is one of
