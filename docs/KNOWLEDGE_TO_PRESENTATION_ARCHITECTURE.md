@@ -765,7 +765,7 @@ styles/terminal/definition.md
 styles/foundations/colors/definition.md
        │
        ▼
-[ASSEMBLED PROMPT] → Gemini API → Generated Image
+[ASSEMBLED PROMPT] → image provider → Generated Image
 ```
 
 ---

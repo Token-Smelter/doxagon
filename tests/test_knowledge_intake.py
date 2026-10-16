@@ -1,5 +1,6 @@
-"""A fresh vault takes a first source from admission to validated graph with the agent as extractor."""
+"""A fresh vault takes a first source from admission to validated graph with the agent as judge."""
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -90,8 +91,8 @@ def test_init_installs_schema_and_skills_for_both_agent_layouts(vault):
 
 
 def test_prompt_carries_the_admitted_source(vault):
-    result = dox(vault, "extract", "p-cold-proofing-notes", "--prompt")
-    assert "Marsh Street Test Kitchen" in result.stdout
+    context = json.loads(dox(vault, "extract", "p-cold-proofing-notes", "--context").stdout)
+    assert ("Marsh Street Test Kitchen" in context["content"], "resolves" in context["edge_types"]) == (True, True)
 
 
 def test_dry_run_writes_nothing(vault, tmp_path):
@@ -143,7 +144,7 @@ def test_invalid_candidate_is_refused_before_any_write(vault, tmp_path, bad):
 
 def test_extract_requires_an_explicit_mode(vault):
     result = dox(vault, "extract", "p-cold-proofing-notes")
-    assert "choose exactly one of --prompt, --response FILE or --gemini" in result.stderr
+    assert "choose exactly one of --context or --response FILE" in result.stderr
 
 
 def test_knowledge_root_follows_vault_metadata_and_falls_back_to_library(tmp_path):

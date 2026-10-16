@@ -14,7 +14,6 @@ const detail = { ...phantasiai[0], channel: 'rss', shared_by: null, tags: ['rese
 
 type PipelineOptions = {
   detailRequestFails?: boolean;
-  extractionFails?: boolean;
 };
 
 async function mockPipeline(page: Page, options: PipelineOptions = {}) {
@@ -23,22 +22,13 @@ async function mockPipeline(page: Page, options: PipelineOptions = {}) {
     const { pathname } = new URL(request.url());
     const method = request.method();
     const isDetailRequest = pathname.endsWith('/phantasiai/active-phantasia') && method === 'GET';
-    const isExtractionRequest = pathname.endsWith('/phantasiai/active-phantasia/extract');
 
     if (isDetailRequest && options.detailRequestFails) return route.abort('failed');
-    if (isExtractionRequest && options.extractionFails) {
-      return route.fulfill({
-        status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ detail: 'Extraction unavailable' }),
-      });
-    }
 
     const body = pathname.endsWith('/pipeline/stats') ? stats
       : pathname.endsWith('/phantasiai') && method === 'GET' ? phantasiai
       : pathname.endsWith('/evidence') ? []
       : isDetailRequest ? detail
-      : isExtractionRequest ? { slug: 'active-phantasia', status: 'processed', created_doxai: ['claim-one'], created_evidence: ['evidence-one'], created_edges: 1, skipped_duplicates: 0, suggested_links: 0 }
       : pathname.endsWith('/phantasiai') && method === 'POST' ? { slug: 'created-phantasia', status: 'unprocessed' }
       : pathname.endsWith('/phantasiai/active-phantasia') && method === 'DELETE' ? { slug: 'active-phantasia', status: 'archived' }
       : {};
@@ -166,15 +156,14 @@ async function expectContrastAtLeast(page: Page, foregroundSelector: string, bac
 test.describe('Pipeline behavior is independent of the backend', () => {
   test.use({ viewport: VIEWPORTS.mobile_medium });
 
-  test('filters, selects, extracts, and retains its URL view', async ({ page }) => {
+  test('filters, selects, points extraction at the agent, and retains its URL view', async ({ page }) => {
     await openPipeline(page, '?view=phantasiai');
     await page.getByRole('button', { name: 'processing', exact: true }).click();
     await expect(page.getByRole('button', { name: /Active encounter/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Fixed encounter/ })).toBeHidden();
     await page.getByRole('button', { name: /Active encounter/ }).click();
     await expect(page.getByRole('heading', { name: 'Active encounter' })).toBeVisible();
-    await page.getByRole('button', { name: 'Extract doxai' }).click();
-    await expect(page.getByText('doxai created')).toBeVisible();
+    await expect(page.getByText('dox extract active-phantasia --context')).toBeVisible();
     await expect(page).toHaveURL(/view=phantasiai/);
   });
 
@@ -239,14 +228,6 @@ test.describe('Pipeline behavior is independent of the backend', () => {
     await openPipeline(page, '?view=phantasiai', { detailRequestFails: true });
     await page.getByRole('button', { name: /Active encounter/ }).click();
     await expect(page.getByRole('alert')).toContainText('Failed to load phantasia');
-    await expectContrastAtLeast(page, '.state.error', '.state.error', 4.5);
-  });
-
-  test('extraction errors remain visible and actionable', async ({ page }) => {
-    await openPipeline(page, '?view=phantasiai', { extractionFails: true });
-    await page.getByRole('button', { name: /Active encounter/ }).click();
-    await page.getByRole('button', { name: 'Extract doxai' }).click();
-    await expect(page.getByRole('alert')).toContainText('Extraction unavailable');
     await expectContrastAtLeast(page, '.state.error', '.state.error', 4.5);
   });
 

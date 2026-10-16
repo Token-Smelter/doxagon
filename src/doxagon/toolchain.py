@@ -363,7 +363,7 @@ def doctor(environ: Mapping[str, str] | None = None) -> dict:
     provider["ok"] = bool(provider["configured"] and provider["executable_sha256"] and provider["resolved_path"]
                           and os.access(provider["resolved_path"], os.X_OK))
     if not provider["ok"]:
-        provider["fix"] = "needed only for image generation; see docs/image-providers.md"
+        provider["fix"] = "needed only for image generation; the image-provider skill sets one up"
     entries = [Path(part) / "dox" for part in env.get("PATH", "").split(os.pathsep) if (Path(part) / "dox").exists()]
     candidates = sorted({str(entry.resolve()) for entry in entries})
     selected = str(Path(command).resolve()) if command else None

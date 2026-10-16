@@ -278,26 +278,7 @@ export async function archivePhantasia(slug: string): Promise<{ slug: string; st
     return res.json();
 }
 
-export interface ExtractionResult {
-    slug: string;
-    status: string;
-    created_doxai: string[];
-    created_evidence: string[];
-    created_edges: number;
-    skipped_duplicates: number;
-    suggested_links: number;
-}
 
-export async function extractPhantasia(slug: string, focus?: string): Promise<ExtractionResult> {
-    const url = new URL(`${API_BASE}/phantasiai/${slug}/extract`, window.location.href);
-    if (focus) url.searchParams.set('focus', focus);
-    const res = await fetch(url, { method: 'POST' });
-    if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Extraction failed');
-    }
-    return res.json();
-}
 
 // ============ Evidence API Functions ============
 

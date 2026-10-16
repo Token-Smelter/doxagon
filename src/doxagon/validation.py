@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
+from difflib import get_close_matches
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -169,11 +170,20 @@ def validate_doxai(
                 continue
             domain = tag.partition(":")[2]
             if not domain or domain not in valid_domains:
-                report.issues.append(
-                    ValidationIssue("malformed_domain", f"{path.stem}: unregistered domain tag {tag!r}")
-                )
+                report.issues.append(ValidationIssue(
+                    "malformed_domain", f"{path.stem}: unregistered domain tag {tag!r}{did_you_mean(domain, valid_domains)}"))
 
     return report
+
+
+def similar_domains(domain: str, valid_domains: Iterable[str]) -> list[str]:
+    """Registered domains close enough in spelling to be the one intended."""
+    return get_close_matches(domain, sorted(valid_domains), n=3, cutoff=0.75)
+
+
+def did_you_mean(domain: str, valid_domains: Iterable[str]) -> str:
+    matches = similar_domains(domain, valid_domains)
+    return f"; did you mean {', '.join(repr(m) for m in matches)}?" if matches else ""
 
 
 def validate_library(

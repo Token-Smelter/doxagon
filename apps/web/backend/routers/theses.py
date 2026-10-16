@@ -2399,7 +2399,7 @@ async def run_generation_job(
     aspect_ratio: str,
     versions: int,
 ):
-    """Background task to generate images using Vertex AI."""
+    """Background task to generate images through the configured image provider."""
     import os
 
     try:

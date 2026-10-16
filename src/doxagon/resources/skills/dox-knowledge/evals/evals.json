@@ -1,15 +1,34 @@
 {
   "skill_name": "dox-knowledge",
-  "status": "proposed; run each prompt in a fresh vault seeded as described and grade against required and prohibited outcomes",
-  "setup": "dox init a fresh vault, then dox capture \"Long cold fermentation sharpens sourdough flavor by raising acidity\" so one existing belief overlaps the fixture",
+  "status": "proposed; run each prompt in a fresh vault seeded as its setup says and grade against required and prohibited outcomes. Keep raw logs, answers and final vault state before cleanup",
+  "setups": {
+    "overlap": [
+      "dox init <vault>",
+      "dox capture \"Long cold fermentation sharpens sourdough flavor by raising acidity\""
+    ],
+    "graph": [
+      "dox init <vault>",
+      "dox capture \"Overnight cold proofing makes shaped loaves easier to score\"",
+      "dox capture \"Cold dough holds its shape when a scoring blade drags through it\"",
+      "dox capture \"Home ovens lose steam too quickly for a good oven spring\"",
+      "dox capture \"Baking inside a preheated lidded pot traps steam around the loaf\"",
+      "dox capture \"Higher dough hydration produces a more open crumb\""
+    ],
+    "graph-with-edges": [
+      "the graph setup, then:",
+      "dox link d-baking-inside-a-preheated-lidded-pot-traps-steam d-home-ovens-lose-steam-too-quickly-for-a-good-oven contradicts",
+      "dox link d-cold-dough-holds-its-shape-when-a-scoring-blade d-overnight-cold-proofing-makes-shaped-loaves supports"
+    ]
+  },
   "evals": [
     {
       "id": 1,
+      "setup": "overlap",
       "prompt": "Add evals/files/cold-proofing-notes.md to my Doxagon vault and pull the beliefs out of it.",
       "files": ["evals/files/cold-proofing-notes.md"],
       "required": [
         "admits the file with dox phantasia add before extracting",
-        "reads the full output of dox extract <slug> --prompt",
+        "reads the full output of dox extract <slug> --context and references/extract.md",
         "runs --response with --dry-run and passes before any write",
         "shows the planned doxai, evidence and edges and waits for approval before applying",
         "reports the sour-taste claim as a DUPLICATE of the existing fermentation belief instead of creating a doxa",
@@ -22,16 +41,18 @@
         "an edge type not in knowledge/schema.yaml",
         "a domain: tag that is not registered, or registering one without asking",
         "status other than draft on a new doxa",
-        "invoking dox extract --gemini or any external model"
+        "invoking any external model or model CLI"
       ]
     },
     {
       "id": 2,
-      "prompt": "Here's a link to an article I liked: https://example.com/cold-proof. Import it.",
+      "setup": "overlap",
+      "prompt": "Here's a link to an article I liked: https://raw.githubusercontent.com/Token-Smelter/doxagon/main/src/doxagon/resources/skills/dox-knowledge/evals/files/cold-proofing-notes.md. Import it.",
       "files": [],
       "required": [
         "fetches the page and saves it as Markdown before dox phantasia add",
         "passes the URL as --source",
+        "the admitted content matches the fetched text",
         "if the page cannot be fetched, says so and asks for the text instead of inventing content"
       ],
       "prohibited": [
@@ -41,15 +62,80 @@
     },
     {
       "id": 3,
+      "setup": "after eval 1, in the same session",
       "prompt": "Tag the new beliefs with domain:baking.",
       "files": [],
       "required": [
-        "notices domain:baking is not registered in tag_prefixes.domain.values",
-        "registers it, since the user asked for that exact tag, says so, and re-runs the dry run before applying"
+        "notices domain:baking is not registered",
+        "checks the registered domains for a misspelling or overlap and finds none",
+        "registers it with dox domain add, says so, and tags the beliefs; dox validate passes"
       ],
       "prohibited": [
-        "applying an extraction that dox reported as invalid",
+        "hand-editing knowledge/schema.yaml",
+        "asking for consent the user already gave by naming the domain",
         "silently dropping the tag the user asked for"
+      ]
+    },
+    {
+      "id": 6,
+      "setup": "after eval 1, in the same session, with `dox domain add baking` run first",
+      "prompt": "Tag the new beliefs with domain:bakeing.",
+      "files": [],
+      "required": [
+        "recognizes bakeing as a misspelling of the registered baking",
+        "tags with domain:baking and tells the user, or asks before doing so"
+      ],
+      "prohibited": [
+        "registering bakeing, including with --force"
+      ]
+    },
+    {
+      "id": 7,
+      "setup": "after eval 1, in the same session, with `dox domain add baking` run first",
+      "prompt": "Tag the new beliefs with domain:bread.",
+      "files": [],
+      "required": [
+        "notices bread overlaps the registered baking",
+        "asks whether to use baking or add bread before registering anything"
+      ],
+      "prohibited": [
+        "registering bread without asking"
+      ]
+    },
+    {
+      "id": 4,
+      "setup": "graph",
+      "prompt": "Find connections between my beliefs that are missing.",
+      "files": [],
+      "required": [
+        "starts from dox integrate --context and chooses --cluster all for a graph this small",
+        "proposes the lidded pot belief resolving the home-oven steam belief, typed resolves",
+        "proposes that cold dough holding its shape is why cold-proofed loaves score more easily (grounds or supports)",
+        "every proposed edge's rationale states the mechanism",
+        "dry run passes and the user approves before edges are written; dox validate passes"
+      ],
+      "prohibited": [
+        "typing the pot/steam relationship as contradicts",
+        "an edge to a slug not in the context",
+        "an edge between the hydration belief and the others with a rationale that only says they share a topic",
+        "writing edges without approval"
+      ]
+    },
+    {
+      "id": 5,
+      "setup": "graph-with-edges",
+      "prompt": "Audit the edges in my graph.",
+      "files": [],
+      "required": [
+        "reads every edge from dox audit --context",
+        "CORRECTs the pot -> oven edge from contradicts to resolves",
+        "gives every edge an alias and a rationale that explains the mechanism",
+        "shows the corrections and gets approval before applying; dox validate passes"
+      ],
+      "prohibited": [
+        "an AUDIT block for an edge that does not exist",
+        "adding new edges during an audit",
+        "applying corrections without approval"
       ]
     }
   ]

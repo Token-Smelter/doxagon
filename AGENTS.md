@@ -32,11 +32,13 @@ flowchart LR
    `entry_point`, `vault_binding`, `skills`, `agents_md` and `path_shims` must
    pass; `provider` and `frontend` matter only for images and the web UI. A
    failing `path_shims` means an older `dox` on PATH: ask before removing it.
+   If the user wants images, follow
+   [`image-provider`](./src/doxagon/resources/skills/image-provider/SKILL.md).
 4. **First import.** Follow
    [`dox-knowledge`](./src/doxagon/resources/skills/dox-knowledge/SKILL.md):
    ask for one to three sources, admit each with `dox phantasia add`, and
-   extract with `dox extract --prompt` / `--response`. You are the extractor;
-   no model API key is needed.
+   extract with `dox extract --context` / `--response`. You are the judge; the
+   CLI calls no model and needs no API key.
 5. **Tutorial.** Follow
    [`doxagon-onboarding`](./src/doxagon/resources/skills/doxagon-onboarding/SKILL.md):
    a pipeline diagram, the user's own graph via `dox graph`, and a

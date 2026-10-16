@@ -1,72 +1,85 @@
 ---
 name: dox-knowledge
-description: Import a source into the vault and extract beliefs, evidence and edges from it, with you as the extractor. Use when the user wants to add an article, paper, transcript or notes to Doxagon, process a phantasia, or check a new claim against existing beliefs.
+description: Grow and maintain the Doxagon belief graph with you as the judge. Use to import an article, paper, transcript or notes and extract beliefs from it; to find missing edges, tensions and gaps across the graph; or to audit edge types and rationales.
 ---
 
-# Knowledge intake
+# Knowledge work
 
-You are the extractor. `dox` prepares the context and validates your answer;
-it never calls a model on this path.
+`dox` gathers data and validates. You judge. No step calls a model on your
+behalf.
 
 ```mermaid
 flowchart LR
-  SRC["source file"] -->|"dox phantasia add"| P["phantasia p-*"]
-  P -->|"dox extract --prompt"| PR["prompt: source + existing beliefs"]
-  PR -->|"you write the answer"| ANS["answer.md"]
+  CTX["dox CMD --context"] -->|"JSON"| YOU["you judge, per the reference"]
+  YOU --> ANS["answer file"]
   ANS -->|"--response --dry-run"| CHK{"valid?"}
-  CHK -->|"no: fix the answer"| ANS
-  CHK -->|"yes, user approves"| W["doxai + evidence + logos edges"]
+  CHK -->|"no: fix"| ANS
+  CHK -->|"yes, user approves"| W["written"]
   W --> V["dox validate"]
 ```
 
-## Steps
+| Task | Context | Judgment and answer format |
+|---|---|---|
+| Import a source and extract beliefs | `dox extract <p-slug> --context` | [references/extract.md](./references/extract.md) |
+| Find missing edges, tensions, gaps | `dox integrate --context [--cluster N\|all\|cross]` | [references/integrate.md](./references/integrate.md) |
+| Confirm or correct edge types | `dox audit --context [--offset N --limit M]` | [references/audit.md](./references/audit.md) |
 
-1. `dox doctor`; fix failures before writing.
-2. **Get text.** `dox phantasia add` takes UTF-8 Markdown or text. Fetch URLs
-   and convert PDFs, slides or transcripts to Markdown yourself first. Keep the
-   original location for `--source`.
-3. **Admit it.**
-   `dox phantasia add source.md --title "..." --source "<url or citation>" --channel article`
-4. **Read the prompt.** `dox extract <p-slug> --prompt > /tmp/<p-slug>.prompt.md`,
-   then read all of it. It holds the source, every existing belief, the edge
-   vocabulary and the exact output format.
-5. **Write the answer** to a file in that format: `===DOXA===`,
-   `===EVIDENCE===`, `===EDGES===`, `===DUPLICATE===` blocks. Rules below.
-6. **Check it.** `dox extract <p-slug> --response answer.md --dry-run`. Nothing
-   is written if any edge, endpoint or domain tag is invalid. Fix the answer and
+Read the reference before you judge; it holds the rules and the exact block
+format `--response` accepts.
+
+## Every task
+
+1. Run `dox doctor` and fix any failures before writing.
+2. Get the context, read all of it, and write your answer to a file.
+3. `dox <cmd> ... --response answer.md --dry-run`. Nothing is written while
+   any block, edge, endpoint or domain tag is invalid. Fix the answer and
    repeat until it passes.
-7. **Show the user** the planned beliefs, evidence and edges, and get approval
-   before writing. Then run the same command without `--dry-run`.
-8. **Cite evidence.** Evidence slugs are assigned at write time, so add each
-   new `e-*` slug to the `evidence:` list of the doxai it supports.
-9. `dox validate`, then report what was created by slug.
+4. Show the user what will change, and get approval before writing.
+5. Run the same command without `--dry-run`, then `dox validate`, then report
+   what changed by slug.
 
-## Answer rules
+## Importing a source
+
+1. **Get text.** `dox phantasia add` takes UTF-8 Markdown or plain text.
+   Fetch URLs and convert PDFs, slides or transcripts to Markdown yourself. If
+   a fetch fails or returns something other than the source, say so and ask
+   for the text; never write a source from memory.
+2. **Admit it:** `dox phantasia add source.md --title "..." --source "<url or
+   citation>" --channel <kind>`.
+3. Extract it per [references/extract.md](./references/extract.md), then run
+   the steps above.
+4. **Cite evidence.** Slugs are assigned at write time, so after applying, add
+   each new `e-*` slug to the `evidence:` list of the doxai it supports.
+
+## Rules that hold everywhere
 
 | Rule | Why |
 |---|---|
-| Every doxa is a claim the source makes or directly implies; no outside knowledge | the graph records what this source supports, not what you know |
-| One atomic, falsifiable claim per doxa; split compound claims | edges and evidence attach to single claims |
-| Evidence quotes the source verbatim and cites only what the source cites | an invented citation is worse than none |
-| A claim already in EXISTING BELIEFS becomes a `===DUPLICATE===` naming its slug, not a new doxa | dedup is your job on this path |
-| New doxai are `NEW:n` in edges; existing ones use their exact `d-*` slug | slugs are assigned at write time |
-| Edge types come only from `knowledge/schema.yaml` `edge_types`; every rationale says *why* | unregistered types are refused |
-| `domain:` tags must be registered in `tag_prefixes.domain.values`; ask before adding one, or omit the tag | domains are controlled vocabulary |
-| `status: draft` on every new doxa | the user, not the extractor, promotes a belief to `canonical` |
-| Omit `source_url` when the source has none (personal notes, a conversation) | an empty or made-up URL reads as a citation |
+| Claims, quotes and citations come only from the material in front of you | the graph records what sources support, not what you know |
+| Edge types only from the context's `edge_types` | unregistered types are refused |
+| `domain:` tags only from the context's `domains` | domains are a controlled vocabulary; see [New domains](#new-domains) |
+| New doxai are `status: draft` | the user, not the judge, promotes a belief to `canonical` |
+| Leave out `source_url` when the source has none | an empty or made-up URL reads as a citation |
 
-Scale the count to the source: a page of notes yields a handful of doxai, a
-long report dozens. The prompt's "extract aggressively" is written for long
-reports; on a first import, prefer 3–8 strong beliefs over exhaustive
-coverage, and this skill wins where the two disagree.
+## New domains
 
-## After writing
+A domain is a controlled topic label (`tags: [domain:baking]`) that `dox list
+--tag` and `dox graph --domain` filter on. Before a new one is registered,
+check the registered list (`dox domain list`) for one that already means it:
 
-- `dox list`, `dox show <slug>`, `dox related <slug>`: inspect results.
-- `dox graph` prints the graph as Mermaid; `dox graph --root <slug>` scopes it.
-- `dox link` / `dox unlink`: adjust edges; both validate the whole edge set.
-- Promotion is a frontmatter edit: `status: draft` → `canonical` once the user
-  endorses the belief.
+| The new name | Do |
+|---|---|
+| is a misspelling of a registered domain (`epistomology` / `epistemology`) | use the registered one; `dox domain add` refuses near-spellings by itself |
+| overlaps a registered domain (`bread` / `baking`, `ml` / `machine-learning`) | ask the user which to use |
+| was named by the user and nothing registered is close | register it with `dox domain add NAME` and say so; naming it was the consent |
+| is one you want to propose yourself | ask first |
 
-`dox extract --gemini` is an optional fallback that lets the Gemini CLI answer
-instead; it needs `gemini` on PATH and is not required for anything here.
+Never hand-edit the domain list; `dox domain add` changes only that list and
+leaves the rest of the schema as it was.
+
+## Afterwards
+
+- `dox list`, `dox show <slug>`, `dox related <slug>`: inspect the result.
+- `dox graph` prints Mermaid; `dox graph --root <slug>` scopes it.
+- `dox link` / `dox unlink`: adjust single edges; both validate the whole set.
+- Promotion is a frontmatter edit: `status: draft` → `canonical`.

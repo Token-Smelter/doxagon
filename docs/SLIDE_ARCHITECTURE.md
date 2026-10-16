@@ -304,7 +304,7 @@ Maximum 14 reference images per image bundle:
 Count = len(styles/*/sources/) + len(images/{id}/sources/)
 ```
 
-If this sum exceeds 14, Gemini API quota is exceeded.
+If this sum exceeds 14, the bundle exceeds the provider contract's reference limit.
 
 ### Self-Contained Image Definitions
 

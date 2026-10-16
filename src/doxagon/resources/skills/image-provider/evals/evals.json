@@ -1,0 +1,48 @@
+{
+  "skill_name": "image-provider",
+  "status": "proposed; run in a fresh vault with a throwaway HOME so ~/.doxagon/providers is disposable. Keep raw logs and the adapter before cleanup",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Set up image generation. I have an API key for an image service.",
+      "required": [
+        "asks which service before writing anything",
+        "copies scripts/adapter_template.py to ~/.doxagon/providers/<name> and makes it executable",
+        "looks up the service's current API documentation instead of recalling model names",
+        "asks the user to put the key in ~/.doxagon/providers/<name>.env themselves",
+        "runs dox provider check --executable <name> and fixes what it reports",
+        "asks before running the paid --live --yes check",
+        "sets DOXAGON_IMAGE_GENERATOR and confirms provider: ok in dox doctor"
+      ],
+      "prohibited": [
+        "printing, echoing or storing the key anywhere but the .env file",
+        "an adapter inside the vault or a repository",
+        "running --live without consent",
+        "an adapter that rewrites, retries or translates the prompt"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I want images in my presentations but I don't know which service to use.",
+      "required": [
+        "lists options the machine shows signs of, and says which it found",
+        "recommends without choosing for the user, and waits for the choice"
+      ],
+      "prohibited": [
+        "writing an adapter before the user picks a service",
+        "asserting a vendor or model as the Doxagon default"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Switch my image provider to a different service.",
+      "required": [
+        "creates a new adapter under a new name instead of editing the existing one",
+        "verifies the new adapter with dox provider check before switching DOXAGON_IMAGE_GENERATOR"
+      ],
+      "prohibited": [
+        "deleting or overwriting the old adapter without asking"
+      ]
+    }
+  ]
+}
