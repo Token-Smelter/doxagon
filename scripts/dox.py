@@ -171,10 +171,29 @@ _DOCUMENT_TEMPLATE = """<!doctype html>
 """
 
 
-@click.group()
-def cli():
+# Commands that work, or explain themselves, without a selected vault.
+VAULTLESS_COMMANDS = {'init', 'vault', 'doctor', 'workspace', 'skills', 'provider',
+                      'html-edition', 'rendering', 'document', 'context', 'styles'}
+
+
+class _DoxGroup(click.Group):
+    def parse_args(self, ctx, args):
+        # Click hides subcommand arguments from the group callback; keep them
+        # so `dox <cmd> --help` works without a vault.
+        ctx.meta['argv'] = list(args)
+        return super().parse_args(ctx, args)
+
+
+@click.group(cls=_DoxGroup)
+@click.pass_context
+def cli(ctx):
     """Manage doxai (beliefs) and their relationships."""
-    pass
+    from doxagon import config
+    asking_for_help = any(arg in ('--help', '-h') for arg in ctx.meta.get('argv', []))
+    if (ctx.invoked_subcommand not in VAULTLESS_COMMANDS and not asking_for_help
+            and config.VAULT_SOURCE == 'none' and not config.DOXAI_DIR.parent.exists()):
+        raise click.ClickException(
+            'no vault selected. Create one with `dox init PATH`, or select one with `dox vault use PATH`.')
 
 
 cli.add_command(html_edition_group)
@@ -191,8 +210,8 @@ def _emit(value: dict, as_json: bool) -> None:
             continue
         if name == 'frontend':
             click.echo(f"frontend: {item['status']}")
-            if not item['ok']:
-                click.echo("  fix: needed only for the web UI; npm ci && npm run build in apps/web/frontend")
+        elif name == 'provider' and item['ok'] and item.get('status', '').startswith('not configured'):
+            click.echo(f"provider: {item['status']}")
         elif name == 'skills':
             states = ', '.join(f"{skill}={record['status']}" for skill, record in sorted(item.items()))
             click.echo(f"skills: {states or 'unavailable'}")
@@ -231,9 +250,10 @@ def skills() -> None:
 def skills_sync(vault: Path | None, force: bool, as_json: bool) -> None:
     """Materialize packaged skills and AGENTS.md without overwriting local edits."""
     from doxagon.toolchain import sync_agent_resources
-    selected = vault or (Path(os.environ['DOXAGON_ROOT']) if os.environ.get('DOXAGON_ROOT') else None)
+    from doxagon.config import selected_vault
+    selected = vault or selected_vault()[0]
     if selected is None:
-        raise click.ClickException('DOXAGON_ROOT is unset; pass --vault PATH')
+        raise click.ClickException('no vault selected; pass --vault PATH')
     report = sync_agent_resources(selected, force)
     if as_json:
         click.echo(json.dumps(report, indent=2, sort_keys=True))
@@ -287,6 +307,38 @@ def provider_list_command() -> None:
         state = 'ok' if os.access(adapter, os.X_OK) else 'not executable'
         click.echo(f"{mark} {adapter.name}  [{state}]")
     click.echo(f"selected: {selected or 'none'} ({source})")
+
+
+@provider.command('install')
+@click.argument('name', required=False)
+def provider_install_command(name: str | None) -> None:
+    """Install a reference adapter (run with no NAME to list them).
+
+    Copies it to ~/.doxagon/providers/NAME and creates NAME.env (mode 600)
+    for its credentials. An existing adapter is never overwritten.
+    """
+    from importlib.resources import files
+    from doxagon.presentation_backends import PROVIDERS_DIR
+    references = files('doxagon').joinpath('resources/skills/image-provider/adapters')
+    available = sorted(item.name.removesuffix('.py') for item in references.iterdir() if item.name.endswith('.py'))
+    if name is None:
+        click.echo(f"Reference adapters: {', '.join(available)}")
+        click.echo("For any other service, the image-provider skill writes one from its template.")
+        return
+    if name not in available:
+        raise click.ClickException(f"no reference adapter {name!r}; available: {', '.join(available)}")
+    directory = PROVIDERS_DIR.expanduser()
+    target, env_file = directory / name, directory / f"{name}.env"
+    if target.exists():
+        raise click.ClickException(f"{target} already exists; remove it first or install under another name")
+    directory.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(references.joinpath(f"{name}.py").read_bytes())
+    target.chmod(0o755)
+    if not env_file.exists():
+        env_file.touch(mode=0o600)
+        env_file.write_text(f"# Credentials for {name}; the header of {target} lists the keys it reads.\n")
+    click.echo(f"Installed {target}")
+    click.echo(f"Next: put your API key in {env_file} (see the header of {target}), then `dox provider use {name}`.")
 
 
 @provider.command('use')
@@ -400,13 +452,48 @@ def init(path):
     click.echo(f"Created empty vault at {created}")
     skill_names = sorted({name.split('/')[0] for name in report['created'] if name != 'AGENTS.md'})
     click.echo(f"Installed skills: {', '.join(skill_names)}")
+    from doxagon import user_config
+    current = user_config.configured_vault()
+    if current is None:
+        recorded = user_config.save_vault(created)
+        click.echo(f"Default vault: {created} (recorded in {recorded})")
+    elif current.resolve() != created:
+        click.echo(f"Default vault is still {current}; switch with `dox vault use {created}`.")
     click.echo()
-    click.echo("Bind it, then check it:")
-    click.echo(f"  export DOXAGON_ROOT={created}")
+    click.echo("Next:")
     click.echo("  dox doctor")
-    click.echo()
-    click.echo("Import a first source:")
     click.echo("  dox phantasia add notes.md")
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def vault(ctx):
+    """Show or set the default vault.
+
+    \b
+    Selection order: DOXAGON_ROOT, then a vault in the current directory,
+    then the default recorded in ~/.config/doxagon/config.toml.
+    """
+    if ctx.invoked_subcommand is None:
+        from doxagon.config import selected_vault
+        selected, source = selected_vault()
+        if selected is None:
+            raise click.ClickException('no vault selected; `dox init PATH` or `dox vault use PATH`')
+        click.echo(f"{selected} ({source})")
+
+
+@vault.command('use')
+@click.argument('path', type=click.Path(path_type=Path))
+def vault_use(path: Path):
+    """Make PATH the default vault."""
+    from doxagon import user_config
+    from doxagon.config import VAULT_METADATA
+    if not (path / VAULT_METADATA).is_file():
+        raise click.ClickException(f"{path} is not a vault (no {VAULT_METADATA}); create one with `dox init {path}`")
+    recorded = user_config.save_vault(path)
+    click.echo(f"Default vault: {path.resolve()} (recorded in {recorded})")
+    if os.environ.get('DOXAGON_ROOT'):
+        click.echo(f"Note: DOXAGON_ROOT={os.environ['DOXAGON_ROOT']} is set and overrides this until unset.")
 
 
 @cli.command()

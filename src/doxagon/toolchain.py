@@ -15,6 +15,7 @@ from typing import Mapping, NamedTuple
 from doxagon.presentation_backends import (
     GENERATED_MEDIA_TYPES,
     provider_command,
+    provider_selection,
     resolve_image_generator_path,
 )
 
@@ -343,27 +344,35 @@ def doctor(environ: Mapping[str, str] | None = None) -> dict:
     env = os.environ if environ is None else environ
     root = platform_root()
     command = shutil.which("dox", path=env.get("PATH"))
-    vault_value = env.get("DOXAGON_ROOT")
-    vault = Path(vault_value).expanduser().resolve() if vault_value else None
+    from doxagon.config import selected_vault
+    vault, vault_source = selected_vault(env)
     status = _git(["status", "--porcelain=v1"], root)
     entry = {"platform_command": command, "resolved_target": str(Path(command).resolve()) if command else None,
              "platform_sha": platform_sha(), "working_tree": "clean" if status == "" else "dirty",
              "ok": bool(command and platform_sha())}
-    vault_check = {"DOXAGON_ROOT": vault_value, "resolved_vault": str(vault) if vault else None,
+    vault_check = {"source": vault_source, "resolved_vault": str(vault) if vault else None,
                    "knowledge": bool(vault and (vault / "knowledge").is_dir()), "projects": bool(vault and (vault / "projects").is_dir())}
     vault_check["ok"] = bool(vault_check["knowledge"] and vault_check["projects"])
     if not vault_check["ok"]:
-        vault_check["fix"] = ("export DOXAGON_ROOT=<vault>, or create one with `dox init <path>`" if vault is None
-                              else f"{vault} is not a vault; point DOXAGON_ROOT at one or run `dox init <path>`")
+        vault_check["fix"] = ("create a vault with `dox init <path>`, or select one with `dox vault use <path>`"
+                              if vault is None else
+                              f"{vault} ({vault_source}) is not a vault; `dox vault use <path>` or `dox init <path>`")
     resources = resource_status(vault) if vault_check["ok"] else {}
     skills = skill_status(vault) if vault_check["ok"] else {}
     agents_md = dict(resources.get(AGENTS_RESOURCE, {"status": "unavailable"}))
     agents_md["ok"] = agents_md["status"] == "current"
     provider = __import__("doxagon.renderings.document_generation", fromlist=["provider_capabilities"]).provider_capabilities(env)
-    provider["ok"] = bool(provider["configured"] and provider["executable_sha256"] and provider["resolved_path"]
-                          and os.access(provider["resolved_path"], os.X_OK))
-    if not provider["ok"]:
-        provider["fix"] = "needed only for image generation; the image-provider skill sets one up, then `dox provider use <name>`"
+    # Image generation is optional: an unconfigured provider is reported, not
+    # failed, so a vault without images passes doctor. A configured one that
+    # cannot run is a real failure.
+    selected, selected_from = provider_selection(env)
+    provider["selected"], provider["selected_from"] = selected or None, selected_from
+    provider["ok"] = not selected or bool(provider["configured"])
+    if not selected:
+        provider["status"] = "not configured (optional: images only)"
+        provider["fix"] = "for images: `dox provider install gemini` or the image-provider skill, then `dox provider use <name>`"
+    elif not provider["ok"]:
+        provider["fix"] = f"{selected} ({selected_from}) cannot run; `dox provider check --executable {selected}`"
     entries = [Path(part) / "dox" for part in env.get("PATH", "").split(os.pathsep) if (Path(part) / "dox").exists()]
     candidates = sorted({str(entry.resolve()) for entry in entries})
     selected = str(Path(command).resolve()) if command else None
@@ -376,8 +385,8 @@ def doctor(environ: Mapping[str, str] | None = None) -> dict:
                         for entry in entries if str(entry.resolve()) in others})
         shims["fix"] = (f"other dox on PATH: {'; '.join(found)}. Remove or uninstall it so only {selected} "
                         f"answers to dox")
-    frontend = {"status": "built" if (root / "apps/web/frontend/build").is_dir() else "absent"}
-    frontend["ok"] = frontend["status"] == "built"
+    frontend = {"status": "built" if (root / "apps/web/frontend/build").is_dir() else "absent (optional: web UI only)"}
+    frontend["ok"] = True
     checks = {"entry_point": entry, "vault_binding": vault_check, "skills": skills, "agents_md": agents_md,
               "provider": provider, "frontend": frontend, "path_shims": shims}
     skills_ok = bool(skills) and all(record["status"] == "current" for record in skills.values())

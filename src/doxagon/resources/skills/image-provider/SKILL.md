@@ -19,6 +19,12 @@ that adapter. Assume no vendor: the user's choice decides.
 
 Start with `dox provider list`: the user may already have an adapter.
 
+**Gemini is ready-made.** If the user has a Gemini API key, run
+`dox provider install gemini`. Ask them to put `GEMINI_API_KEY=<key>` in
+`~/.doxagon/providers/gemini.env` themselves, then run
+`dox provider use gemini` and skip the rest. For any other service, follow
+the steps below.
+
 ```mermaid
 flowchart LR
   A["ask: which service, which credentials"] --> B["copy scripts/adapter_template.py"]

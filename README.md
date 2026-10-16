@@ -52,10 +52,13 @@ uv tool install --editable .        # puts `dox` on PATH
 # look around first: packaged synthetic sample vault, read-only
 dox workspace --demo
 
-# create a vault of your own (installs skills too), then bind and check it
+# create a vault of your own; it becomes your default vault (dox vault use switches)
 dox init ~/doxagon-vault
-export DOXAGON_ROOT=~/doxagon-vault
 dox doctor
+
+# optional: images, with a Gemini API key or any adapter you write
+dox provider install gemini   # then add GEMINI_API_KEY to ~/.doxagon/providers/gemini.env
+dox provider use gemini
 
 # first import: your agent judges; dox gathers data and validates
 dox phantasia add notes.md

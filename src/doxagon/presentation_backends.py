@@ -20,13 +20,12 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 from tempfile import TemporaryDirectory
-import tomllib
 from typing import Mapping, Sequence
 
+from . import user_config
 from .presentations.authoring import AgentAuthor, AuthoringRequest
 from .presentations.errors import WorkspaceError
 from .presentations.generation import GeneratedImage, ImageGenerator, GeneratorInput, generator_argv
@@ -165,19 +164,6 @@ class SubprocessAgentAuthor:
 PROVIDERS_DIR = Path("~/.doxagon/providers")
 
 
-def user_config_path(environ: Mapping[str, str] | None = None) -> Path | None:
-    """The user's Doxagon config file: $DOXAGON_CONFIG, else ~/.config/doxagon/config.toml.
-
-    Derived from the given environment only, so a caller that passes its own
-    environment (a test, a subprocess) never reads the real user's file.
-    """
-    environment = os.environ if environ is None else environ
-    if environment.get("DOXAGON_CONFIG"):
-        return Path(environment["DOXAGON_CONFIG"]).expanduser()
-    home = environment.get("HOME")
-    return Path(home) / ".config" / "doxagon" / "config.toml" if home else None
-
-
 def provider_selection(environ: Mapping[str, str] | None = None) -> tuple[str, str]:
     """Return (provider name, where it was set): env, config, or unset.
 
@@ -188,15 +174,10 @@ def provider_selection(environ: Mapping[str, str] | None = None) -> tuple[str, s
     named = environment.get("DOXAGON_IMAGE_GENERATOR", "").strip()
     if named:
         return named, "env"
-    path = user_config_path(environment)
-    if path and path.is_file():
-        try:
-            image = tomllib.loads(path.read_text(encoding="utf-8")).get("image") or {}
-        except (OSError, tomllib.TOMLDecodeError):
-            image = {}
-        configured = image.get("provider") if isinstance(image, dict) else None
-        if isinstance(configured, str) and configured.strip():
-            return configured.strip(), "config"
+    image = user_config.read(environment).get("image")
+    configured = image.get("provider") if isinstance(image, dict) else None
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip(), "config"
     return "", "unset"
 
 
@@ -206,33 +187,8 @@ def provider_command(environ: Mapping[str, str] | None = None) -> str:
 
 
 def save_provider(name: str, environ: Mapping[str, str] | None = None) -> Path:
-    """Record `name` as `[image] provider` in the user config, changing nothing else.
-
-    The file is edited as text and re-parsed; the write is refused unless the
-    only difference is that one value, so workspace settings and comments in
-    the same file survive.
-    """
-    path = user_config_path(environ)
-    if path is None:
-        raise ValueError("no config location: set DOXAGON_CONFIG or HOME")
-    text = path.read_text(encoding="utf-8") if path.is_file() else ""
-    before = tomllib.loads(text)
-    line = f"provider = {json.dumps(name)}"
-    section = re.search(r"(?m)^\[image\][ \t]*\n((?:(?!\[)[^\n]*\n?)*)", text)
-    if section is None:
-        edited = text + ("" if not text or text.endswith("\n") else "\n") + ("\n" if text else "") + f"[image]\n{line}\n"
-    else:
-        body = section.group(1)
-        new_body, count = re.subn(r"(?m)^[ \t]*provider[ \t]*=.*$", line, body, count=1)
-        if not count:
-            new_body = f"{line}\n{body}"
-        edited = text[:section.start(1)] + new_body + text[section.end(1):]
-    expected = {**before, "image": {**(before.get("image") or {}), "provider": name}}
-    if tomllib.loads(edited) != expected:
-        raise ValueError(f"could not edit {path} safely; set [image] provider = {json.dumps(name)} by hand")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(edited, encoding="utf-8")
-    return path
+    """Record `name` as `[image] provider` in the user config."""
+    return user_config.set_value("image", "provider", name, environ)
 
 
 def installed_providers() -> list[Path]:
