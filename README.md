@@ -40,16 +40,28 @@ write-ahead log, so an interrupted write converges instead of corrupting.
 
 ## Quickstart
 
+Using a coding agent? Clone the repo, open the agent in it, and say "set me
+up". [AGENTS.md](./AGENTS.md) walks it through install, vault creation, a
+first import and a short tutorial.
+
 ```bash
-git clone https://github.com/Token-Smelter/doxagon-platform.git
-cd doxagon-platform
+git clone https://github.com/Token-Smelter/doxagon.git
+cd doxagon
+uv tool install --editable .        # puts `dox` on PATH
 
 # look around first: packaged synthetic sample vault, read-only
-uv run python scripts/dox.py workspace --demo
+dox workspace --demo
 
-# create a vault of your own
-uv run python scripts/dox.py init ~/doxagon-vault
-uv run python scripts/dox.py workspace --vault ~/doxagon-vault
+# create a vault of your own (installs skills too), then bind and check it
+dox init ~/doxagon-vault
+export DOXAGON_ROOT=~/doxagon-vault
+dox doctor
+
+# first import: your agent is the extractor
+dox phantasia add notes.md
+dox extract p-notes --prompt > prompt.md     # agent writes answer.md
+dox extract p-notes --response answer.md --dry-run
+dox extract p-notes --response answer.md
 
 # web UI (the backend still selects its vault by environment variable;
 # converting it to --vault is in progress)

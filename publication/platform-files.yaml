@@ -36,6 +36,10 @@ include:
 - NOTICE
 - TRADEMARKS.md
 - README.md
+# Public onboarding for an agent that clones the repository. Private agent
+# notes belong in a vault or an untracked AGENTS.local.md, never here.
+- AGENTS.md
+- CLAUDE.md
 - docs/DEV_TASKS_ARCHITECTURE.md
 - docs/EXTRACTION_ARCHITECTURE.md
 - docs/EXTRACTION_QUICK_REF.md
@@ -76,8 +80,6 @@ forbidden:
 - .claude/**
 - .pi/**
 - publish/**
-- AGENTS.md
-- CLAUDE.md
 - CLAUDE_LOG.md
 - '-'
 - -*

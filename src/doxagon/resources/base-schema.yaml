@@ -1,0 +1,33 @@
+# Starting edge vocabulary for a new vault. It matches the edge types the
+# extraction prompt offers. The vault owns this file afterwards: add types here
+# before using them, and never invent one inside an edge.
+edge_types:
+  supports:
+    description: "Source provides reason to accept target"
+    inverse: "is supported by"
+  contradicts:
+    description: "Source and target are in tension"
+    symmetric: true
+  requires:
+    description: "Target is a prerequisite for source"
+    inverse: "enables"
+  elaborates:
+    description: "Source adds detail or nuance to target"
+    inverse: "is elaborated by"
+  grounds:
+    description: "Source provides foundational basis for target"
+    inverse: "is grounded by"
+  causes:
+    description: "Source creates or leads to target"
+    inverse: "is caused by"
+  resolves:
+    description: "Source provides a solution to a problem stated in target"
+    inverse: "is resolved by"
+
+# `domain:<value>` tags are controlled: register a value here before a doxa
+# uses it. Other tags are free.
+tag_prefixes:
+  domain:
+    controlled: true
+    values: []
+    description: "Organizational grouping for scoped queries"

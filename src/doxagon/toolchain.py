@@ -352,6 +352,9 @@ def doctor(environ: Mapping[str, str] | None = None) -> dict:
     vault_check = {"DOXAGON_ROOT": vault_value, "resolved_vault": str(vault) if vault else None,
                    "knowledge": bool(vault and (vault / "knowledge").is_dir()), "projects": bool(vault and (vault / "projects").is_dir())}
     vault_check["ok"] = bool(vault_check["knowledge"] and vault_check["projects"])
+    if not vault_check["ok"]:
+        vault_check["fix"] = ("export DOXAGON_ROOT=<vault>, or create one with `dox init <path>`" if vault is None
+                              else f"{vault} is not a vault; point DOXAGON_ROOT at one or run `dox init <path>`")
     resources = resource_status(vault) if vault_check["ok"] else {}
     skills = skill_status(vault) if vault_check["ok"] else {}
     agents_md = dict(resources.get(AGENTS_RESOURCE, {"status": "unavailable"}))
@@ -359,11 +362,16 @@ def doctor(environ: Mapping[str, str] | None = None) -> dict:
     provider = __import__("doxagon.renderings.document_generation", fromlist=["provider_capabilities"]).provider_capabilities(env)
     provider["ok"] = bool(provider["configured"] and provider["executable_sha256"] and provider["resolved_path"]
                           and os.access(provider["resolved_path"], os.X_OK))
+    if not provider["ok"]:
+        provider["fix"] = "needed only for image generation; see docs/image-providers.md"
     candidates = sorted({str((Path(part) / "dox").resolve()) for part in env.get("PATH", "").split(os.pathsep)
                          if (Path(part) / "dox").exists()})
     selected = str(Path(command).resolve()) if command else None
     others = [candidate for candidate in candidates if candidate != selected]
     shims = {"matches": candidates, "other": others, "ok": not others}
+    if others:
+        shims["fix"] = (f"other dox executables on PATH: {', '.join(others)}; uninstall them or remove their "
+                        f"directories from PATH so only {selected} remains")
     frontend = {"status": "built" if (root / "apps/web/frontend/build").is_dir() else "absent"}
     frontend["ok"] = frontend["status"] == "built"
     checks = {"entry_point": entry, "vault_binding": vault_check, "skills": skills, "agents_md": agents_md,

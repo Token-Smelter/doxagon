@@ -740,6 +740,8 @@ def initialize_empty_vault(destination: Path, *, vault_id: UUID | None = None) -
 
     empty_logos = resources.files("doxagon.resources").joinpath("empty-logos.yaml").read_text(encoding="utf-8")
     (destination / "knowledge" / "logos.yaml").write_text(empty_logos, encoding="utf-8")
+    base_schema = resources.files("doxagon.resources").joinpath("base-schema.yaml").read_text(encoding="utf-8")
+    (destination / "knowledge" / "schema.yaml").write_text(base_schema, encoding="utf-8")
     # Orientation is written here, not left to sync: an agent may open a fresh
     # vault before any sync runs. Imported locally so bootstrap does not pull in
     # the toolchain's provider machinery.

@@ -37,7 +37,8 @@ from doxagon.storage import read_logos
 from doxagon.validation import GraphIntegrityError, validate_library
 from doxagon.prompts import load_prompt
 from doxagon.schema import load_schema
-from doxagon.extract import extract_from_phantasia
+from doxagon.extract import apply_extraction, extract_from_phantasia, extraction_prompt
+from doxagon.phantasia import CHANNELS as PHANTASIA_CHANNELS, add_phantasia, list_phantasiai
 from doxagon.integrate import run_integration
 from doxagon.audit import run_audit
 from doxagon.onboarding import remediation_for
@@ -192,13 +193,19 @@ def _emit(value: dict, as_json: bool) -> None:
             continue
         if name == 'frontend':
             click.echo(f"frontend: {item['status']}")
+            if not item['ok']:
+                click.echo("  fix: needed only for the web UI; npm ci && npm run build in apps/web/frontend")
         elif name == 'skills':
             states = ', '.join(f"{skill}={record['status']}" for skill, record in sorted(item.items()))
             click.echo(f"skills: {states or 'unavailable'}")
+            if any(record['status'] in ('missing', 'stale') for record in item.values()):
+                click.echo("  fix: dox skills sync")
         elif name == 'agents_md':
             click.echo(f"agents_md: {item['status']}")
         elif isinstance(item, dict) and 'ok' in item:
             click.echo(f"{name}: {'ok' if item['ok'] else 'failing'}")
+            if not item['ok'] and item.get('fix'):
+                click.echo(f"  fix: {item['fix']}")
         else:
             click.echo(f"{name}: {item}")
 
@@ -341,11 +348,25 @@ def init(path):
     except (OSError, ValueError) as error:
         raise click.ClickException(str(error))
 
+    from doxagon.toolchain import SKILLS_DIRECTORY, sync_agent_resources
+    report = sync_agent_resources(created, False)
+    # Claude Code reads CLAUDE.md and .claude/skills; other agents read
+    # AGENTS.md and .pi/skills. Point the former at the latter so one copy
+    # serves both and `dox skills sync` keeps it current.
+    (created / '.claude').mkdir(exist_ok=True)
+    (created / '.claude' / 'skills').symlink_to(Path('..') / SKILLS_DIRECTORY)
+    (created / 'CLAUDE.md').write_text('@AGENTS.md\n', encoding='utf-8')
+
     click.echo(f"Created empty vault at {created}")
-    click.echo("Wrote AGENTS.md; run `dox skills sync` to install the skills beside it.")
+    skill_names = sorted({name.split('/')[0] for name in report['created'] if name != 'AGENTS.md'})
+    click.echo(f"Installed skills: {', '.join(skill_names)}")
     click.echo()
-    click.echo(f"  dox skills sync --vault {created}")
-    click.echo(f"  dox workspace --vault {created}")
+    click.echo("Bind it, then check it:")
+    click.echo(f"  export DOXAGON_ROOT={created}")
+    click.echo("  dox doctor")
+    click.echo()
+    click.echo("Import a first source:")
+    click.echo("  dox phantasia add notes.md")
 
 
 @cli.command()
@@ -781,7 +802,7 @@ updated: {today}
     click.echo(f"  ID: {target_path.stem}")
     click.echo("  Status: draft")
     click.echo("\nNext steps:")
-    click.echo(f"  dox edit {target_path.stem}     # Add evidence and body")
+    click.echo(f"  edit {target_path}  # Add evidence and body")
     click.echo(f"  dox link {target_path.stem} ... # Connect to related doxai")
 
 
@@ -1797,37 +1818,97 @@ def dedup(candidate: str, as_json: bool):
         sys.exit(1)
 
 
+@cli.group()
+def phantasia():
+    """Admit sources into the vault: the first stage of the pipeline."""
+
+
+@phantasia.command('add')
+@click.argument('path', type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option('--title', help='Title; default derived from the file name')
+@click.option('--source', help='Where it came from (URL or citation); default the file name')
+@click.option('--channel', type=click.Choice(PHANTASIA_CHANNELS), default='article', show_default=True)
+@click.option('--tag', 'tags', multiple=True, help='Tag, repeatable (e.g. domain:ai-economics)')
+def phantasia_add(path: Path, title: str | None, source: str | None, channel: str, tags: tuple[str, ...]):
+    """Copy a Markdown or text file into the vault as a new phantasia.
+
+    Convert PDFs, web pages and transcripts to Markdown first; the file's text
+    is embedded in the phantasia so it survives the original moving.
+    """
+    try:
+        slug = add_phantasia(path, title=title, source=source, channel=channel, tags=tags)
+    except ValueError as error:
+        raise click.ClickException(str(error))
+    click.echo(f"Created {slug}")
+    click.echo(f"  next: dox extract {slug} --prompt")
+
+
+@phantasia.command('list')
+@click.option('--json', 'as_json', is_flag=True)
+def phantasia_list(as_json: bool):
+    """List phantasiai and their extraction status."""
+    entries = list_phantasiai()
+    if as_json:
+        click.echo(json.dumps(entries, indent=2))
+        return
+    if not entries:
+        click.echo("No phantasiai. Add one with: dox phantasia add FILE")
+    for entry in entries:
+        click.echo(f"{entry['slug']}  [{entry['status']}]  {entry['title']}")
+
+
 @cli.command()
 @click.argument('phantasia_slug')
 @click.option('--focus', help='Focus areas to emphasize during extraction')
 @click.option('--instructions', help='Additional custom instructions')
 @click.option('--dry-run', is_flag=True, help='Validate without writing files')
-def extract(phantasia_slug: str, focus: str, instructions: str, dry_run: bool):
-    """Extract doxai and evidence from a phantasia.
+@click.option('--prompt', 'show_prompt', is_flag=True, help='Print the extraction prompt for your agent to answer')
+@click.option('--response', 'response_file', type=click.Path(exists=True, dir_okay=False, path_type=Path),
+              help="Validate and apply your agent's answer to --prompt ('-' is not accepted)")
+@click.option('--gemini', is_flag=True, help='Have the Gemini CLI answer instead (requires `gemini` on PATH)')
+def extract(phantasia_slug: str, focus: str, instructions: str, dry_run: bool,
+            show_prompt: bool, response_file: Path | None, gemini: bool):
+    """Extract doxai, evidence and edges from a phantasia.
 
-    Uses Gemini to analyze the source document and extract:
-    - Atomic beliefs (doxai) with reasoning
-    - Evidence artifacts with citations
-    - Edges connecting to existing beliefs
+    The extractor is your own agent. Choose exactly one mode:
 
-    Includes automatic deduplication against existing doxai.
+    \b
+      --prompt          print the prompt: source, existing beliefs, output format
+      --response FILE   validate the answer and write doxai, evidence and edges
+      --gemini          let the Gemini CLI answer (chunked, with `dox dedup`)
 
+    The whole candidate graph is validated before anything is written, so run
+    --response with --dry-run first, fix what it reports, then apply.
+
+    \b
     Examples:
-      dox extract p-my-source
-      dox extract p-chat-thread --focus "AI economics"
-      dox extract p-research-notes --dry-run
+      dox extract p-my-source --prompt > prompt.md
+      dox extract p-my-source --response answer.md --dry-run
+      dox extract p-my-source --response answer.md
     """
+    if sum((show_prompt, response_file is not None, gemini)) != 1:
+        raise click.UsageError('choose exactly one of --prompt, --response FILE or --gemini')
+    if show_prompt:
+        try:
+            click.echo(extraction_prompt(phantasia_slug, focus=focus, instructions=instructions))
+        except FileNotFoundError as e:
+            raise click.ClickException(str(e))
+        return
+
     click.echo(f"Extracting from: {phantasia_slug}")
     if dry_run:
         click.echo("(dry run - no files will be written)")
 
     try:
-        results = extract_from_phantasia(
-            phantasia_slug,
-            focus=focus,
-            instructions=instructions,
-            dry_run=dry_run,
-        )
+        if response_file is not None:
+            results = apply_extraction(phantasia_slug, response_file.read_text(encoding='utf-8'), dry_run=dry_run)
+        else:
+            results = extract_from_phantasia(
+                phantasia_slug,
+                focus=focus,
+                instructions=instructions,
+                dry_run=dry_run,
+            )
 
         # Report results
         if results['created_doxai']:
@@ -1875,6 +1956,11 @@ def extract(phantasia_slug: str, focus: str, instructions: str, dry_run: bool):
 
     except FileNotFoundError as e:
         click.echo(f"ERROR: {e}", err=True)
+        sys.exit(1)
+    except GraphIntegrityError as e:
+        click.echo("ERROR: nothing was written; the candidate graph is invalid:", err=True)
+        for issue in e.report.issues:
+            click.echo(f"  ! {issue.code}: {issue.message}", err=True)
         sys.exit(1)
     except Exception as e:
         click.echo(f"ERROR: Extraction failed: {e}", err=True)

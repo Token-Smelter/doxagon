@@ -64,6 +64,7 @@ Canonical vault layout — these names, no others:
 
 | Path | Holds |
 |---|---|
+| `knowledge/phantasiai/` | admitted sources, `p-<slug>.md`, created by `dox phantasia add` |
 | `knowledge/doxai/` | beliefs, one markdown file each, `d-<slug>.md`, frontmatter carries `belief`, `status`, `tags`, `evidence`, `created`, `updated` |
 | `knowledge/evidence/` | evidence records, `e-<slug>.md` |
 | `knowledge/diegeses/` | narrative walks over the graph |
@@ -94,10 +95,16 @@ dox search <query>
 dox path <source> <target>        # directed by default
 dox tree <belief> [--depth N]
 dox capture "<belief statement>"  # new draft belief
+dox phantasia add <file>          # admit a source; then extract it
+dox extract <p-slug> --prompt     # you are the extractor: read, answer, then
+dox extract <p-slug> --response <answer> [--dry-run]
 dox link <source> <target> <edge_type> [--alias LABEL]
 dox unlink <source> <target> <edge_type>
 dox validate                      # integrity codes; run before you finish
 ```
+
+Invoke the `dox-knowledge` skill to import and extract a source, and
+`doxagon-onboarding` for a first-run walkthrough or when the vault has no doxai.
 
 ## 4. Style bundles
 
