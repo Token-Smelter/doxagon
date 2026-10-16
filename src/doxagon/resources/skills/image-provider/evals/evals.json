@@ -12,7 +12,7 @@
         "asks the user to put the key in ~/.doxagon/providers/<name>.env themselves",
         "runs dox provider check --executable <name> and fixes what it reports",
         "asks before running the paid --live --yes check",
-        "sets DOXAGON_IMAGE_GENERATOR and confirms provider: ok in dox doctor"
+        "selects it with dox provider use and confirms provider: ok in dox doctor"
       ],
       "prohibited": [
         "printing, echoing or storing the key anywhere but the .env file",
@@ -38,7 +38,7 @@
       "prompt": "Switch my image provider to a different service.",
       "required": [
         "creates a new adapter under a new name instead of editing the existing one",
-        "verifies the new adapter with dox provider check before switching DOXAGON_IMAGE_GENERATOR"
+        "switches with dox provider use, which verifies the new adapter first"
       ],
       "prohibited": [
         "deleting or overwriting the old adapter without asking"

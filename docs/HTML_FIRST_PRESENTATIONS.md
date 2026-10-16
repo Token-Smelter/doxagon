@@ -397,7 +397,7 @@ deployment:
 
 | Environment variable | Seam | Interface |
 |---|---|---|
-| `DOXAGON_IMAGE_GENERATOR` | `generation.ImageGenerator` | argv from `generator_argv` (`--prompt-file`, `--output`, `--image-size`, `--aspect-ratio`, repeated `--source`); writes image files into the output directory |
+| `DOXAGON_IMAGE_GENERATOR` (else `[image] provider` in the user config) | `generation.ImageGenerator` | argv from `generator_argv` (`--prompt-file`, `--output`, `--image-size`, `--aspect-ratio`, repeated `--source`); writes image files into the output directory |
 | `DOXAGON_AGENT_AUTHOR` | `authoring.AgentAuthor` | the authoring request (the server-issued task included) as JSON on stdin; the proposed source on stdout |
 
 (`DOXAGON_PRESENTATION_MAX_TOTAL_ASSET_BYTES` is deployment configuration, not a

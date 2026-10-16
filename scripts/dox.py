@@ -264,7 +264,49 @@ def presentation_context(project: str, as_json: bool) -> None:
 
 @cli.group()
 def provider() -> None:
-    """Inspect and conformance-check the configured image provider."""
+    """Choose, inspect and conformance-check the image provider adapter.
+
+    \b
+    The adapter is yours: an executable in ~/.doxagon/providers/ that follows
+    docs/image-providers.md. `dox provider use NAME` records the choice as
+    [image] provider in ~/.config/doxagon/config.toml ($DOXAGON_CONFIG);
+    DOXAGON_IMAGE_GENERATOR overrides it for one run.
+    """
+
+
+@provider.command('list')
+def provider_list_command() -> None:
+    """List installed adapters and show which one is selected, and from where."""
+    from doxagon.presentation_backends import PROVIDERS_DIR, installed_providers, provider_selection
+    selected, source = provider_selection()
+    adapters = installed_providers()
+    if not adapters:
+        click.echo(f"No adapters in {PROVIDERS_DIR}. The image-provider skill sets one up.")
+    for adapter in adapters:
+        mark = '*' if adapter.name == selected else ' '
+        state = 'ok' if os.access(adapter, os.X_OK) else 'not executable'
+        click.echo(f"{mark} {adapter.name}  [{state}]")
+    click.echo(f"selected: {selected or 'none'} ({source})")
+
+
+@provider.command('use')
+@click.argument('name')
+@click.option('--force', is_flag=True, help='Record it even if the free check fails')
+def provider_use_command(name: str, force: bool) -> None:
+    """Verify an adapter (free check), then make it the default."""
+    from doxagon.presentation_backends import provider_selection, save_provider
+    from doxagon.toolchain import provider_check
+    report = provider_check(name, False)
+    if not report['ok'] and not force:
+        raise click.ClickException(f"{name}: {report.get('error', 'check failed')}; fix it or pass --force")
+    try:
+        path = save_provider(name)
+    except ValueError as error:
+        raise click.ClickException(str(error))
+    click.echo(f"Image provider: {name} (recorded in {path})")
+    overriding, source = provider_selection()
+    if source == 'env' and overriding != name:
+        click.echo(f"Note: DOXAGON_IMAGE_GENERATOR={overriding} is set and overrides this until unset.")
 
 
 @provider.command('check')

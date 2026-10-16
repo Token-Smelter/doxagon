@@ -28,9 +28,21 @@ Write diagnostics to stderr only. The platform retains the final 400 bytes on fa
 
 `max_references` is an integer no greater than 14. `resolutions` and `aspect_ratios` are nonempty subsets of the platform values. The platform uses valid values only to narrow its defaults. An adapter that does not implement this invocation may exit nonzero; it remains compatible and receives platform defaults.
 
-## Environment and location
+## Location and selection
 
-The platform passes no credentials. An adapter may load its own configuration from `~/.doxagon/providers/<name>.env` or equivalent. Put adapter executables in `~/.doxagon/providers/`; a bare configured name is resolved there before `PATH`. `DOXAGON_IMAGE_MODEL` may label a receipt.
+| What | Where |
+|---|---|
+| Adapter executable | `~/.doxagon/providers/<name>`, outside every repository and vault |
+| Adapter credentials | `~/.doxagon/providers/<name>.env`, read by the adapter; the platform passes none |
+| Which adapter is used | `[image] provider = "<name>"` in `~/.config/doxagon/config.toml` (or `$DOXAGON_CONFIG`) |
+| One-off override | `DOXAGON_IMAGE_GENERATOR=<name or path>` |
+
+Selection is per user, not per vault: adapters and credentials belong to a
+machine, and a vault may be shared. `dox provider list` shows installed
+adapters and the current selection; `dox provider use <name>` runs the free
+conformance check and records the choice. A bare name resolves in
+`~/.doxagon/providers/` before `PATH`. `DOXAGON_IMAGE_MODEL` may label a
+receipt.
 
 ## Conformance
 
