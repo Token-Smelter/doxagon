@@ -1,6 +1,9 @@
 import os
 import tomllib
 from pathlib import Path
+from typing import Mapping
+
+from doxagon import user_config
 
 VAULT_METADATA = Path(".doxagon") / "vault.toml"
 
@@ -23,17 +26,28 @@ def knowledge_root(root: Path) -> Path:
     return root / "library"
 
 
-# Resolve project root
-# 1. Env var has highest priority
-if os.environ.get("DOXAGON_ROOT"):
-    ROOT_DIR = Path(os.environ["DOXAGON_ROOT"]).resolve()
-# 2. Check if current directory is a vault or a legacy library checkout
-elif (Path.cwd() / VAULT_METADATA).is_file() or (Path.cwd() / "library").exists():
-    ROOT_DIR = Path.cwd()
-# 3. Fallback for editable install: ../../.. from this file
-#    src/doxagon/config.py -> src/doxagon -> src -> root
-else:
-    ROOT_DIR = Path(__file__).parent.parent.parent.resolve()
+def selected_vault(environ: Mapping[str, str] | None = None, cwd: Path | None = None) -> tuple[Path | None, str]:
+    """Return (vault, how it was chosen): env, cwd, config, or none.
+
+    `DOXAGON_ROOT` wins, then a vault (or legacy library/) in the current
+    directory, then the default vault `dox init` / `dox vault use` recorded.
+    """
+    environment = os.environ if environ is None else environ
+    here = Path.cwd() if cwd is None else cwd
+    if environment.get("DOXAGON_ROOT"):
+        return Path(environment["DOXAGON_ROOT"]).expanduser().resolve(), "env"
+    if (here / VAULT_METADATA).is_file() or (here / "library").exists():
+        return here, "cwd"
+    configured = user_config.configured_vault(environment)
+    if configured is not None:
+        return configured.resolve(), "config"
+    return None, "none"
+
+
+_vault, VAULT_SOURCE = selected_vault()
+# With no vault selected, paths point at the platform checkout so imports work;
+# the CLI refuses knowledge commands in that state rather than write here.
+ROOT_DIR = _vault or Path(__file__).parent.parent.parent.resolve()
 
 LIBRARY_DIR = knowledge_root(ROOT_DIR)
 THESES_DIR = ROOT_DIR / "theses"

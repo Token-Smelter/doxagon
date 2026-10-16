@@ -19,12 +19,12 @@ It is read-only and exits 0 only when every check passes.
 | Check | Reports | A failure means |
 |---|---|---|
 | `entry_point` | which `dox` ran, its resolved target, the platform commit, and whether the platform tree is clean | the command you invoke is not the platform you think it is |
-| `vault_binding` | `DOXAGON_ROOT`, the resolved vault, and whether `knowledge/` and `projects/` exist | no vault is bound, or the bound path is not a vault |
+| `vault_binding` | the selected vault and how it was chosen (`DOXAGON_ROOT`, current directory, or the default from `dox vault use`), and whether `knowledge/` and `projects/` exist | no vault is selected, or the selected path is not a vault |
 | `skills` | per-skill freshness, including nested files: `missing`, `current`, `stale`, `foreign` | the skills you are about to follow are absent or not the platform's |
 | `agents_md` | this file's freshness in the same four-word vocabulary | your orientation text is absent or not the platform's |
-| `provider` | the configured image provider's name, resolved path and `executable_sha256` | image generation cannot run, or runs an unidentified binary |
+| `provider` | the selected image adapter's name, resolved path and `executable_sha256`; passes while none is selected, since images are optional | an adapter is selected but cannot run |
 | `path_shims` | every other `dox` found on `PATH` | a stale shim can shadow the platform entry point |
-| `frontend` | whether the platform's built web frontend is present | the hosted workspace cannot serve |
+| `frontend` | whether the platform's built web frontend is present; informational, never failing | (does not fail; `absent` means the web UI cannot serve) |
 
 Fix a failing check before doing anything else. Do not route around it, and do
 not carry a failed check forward into a task.
